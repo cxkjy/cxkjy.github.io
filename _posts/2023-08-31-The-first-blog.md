@@ -12,3 +12,9 @@ image:
 ---
 
 `测试`
+
+![](/img/swirl/11.jpg)
+
+<center>
+    <img src="/img/swirl/11.jpg">
+</center>
