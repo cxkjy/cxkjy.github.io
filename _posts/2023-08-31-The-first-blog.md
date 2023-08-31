@@ -1,0 +1,14 @@
+---
+layout: post
+title: 第一篇博客
+categories: [blog ]
+tags: [Java,]
+description: "测试"
+image:
+  feature: windows.jpg
+  credit: Azeril
+  creditlink: azeril.com
+ 
+---
+
+`测试`
