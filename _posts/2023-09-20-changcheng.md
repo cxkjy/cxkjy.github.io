@@ -121,6 +121,18 @@ $name=="ctf"
 
 ![image-20230920105255431](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230920105255431.png)
 
+发现url编码的问题估计是我自己本地的错误，题目url编码就可以，还有写错了变量（纯自己问题）
+
+![image-20230920175957134](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230920175957134.png)
+
+```
+$e=new export();
+$e->clazz=new ctf();
+$e->args="'c'.'t'.'f',2022";
+echo serialize($e);
+echo urlencode(serialize($e));
+```
+
 ## ScreenController
 
 下面是做题的思路和笔记
@@ -419,4 +431,13 @@ public class SpringInterceptor  extends AbstractTranslet implements HandlerInter
 没想到直接找modbus流量，然后最后一位然后拼接成hex编码即可
 
 666c6167  这是找出的标准的flag头，剩下的也是同样的道理
+
+
+
+### 总结
+
+```
+这场比赛我背锅，总是看见赛题就感觉很难，非常惧怕不敢做（也是不相信自己的行为）
+尤其是1解 0解 那种，希望自己以后有做的勇气，做了又不亏啥。
+```
 
