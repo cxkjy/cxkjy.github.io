@@ -14,7 +14,7 @@ image:
 
 `测试`
 
-![](/img/swirl/11.jpg)
+![](/img/10/11.jpg)
 
 ### 前言
 
@@ -111,19 +111,19 @@ $name=="ctf"
 
 骚姿势拼接进行绕过
 
-![image-20230920104218139](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230920104218139.png)
+![](/img/10/image-20230920104218139.png)
 
 
 
 自己在复现的时候还是错误了
 
-![image-20230920105302274](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230920105302274.png)
+![](/img/10/image-20230920105302274.png)
 
-![image-20230920105255431](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230920105255431.png)
+![](/img/10/image-20230920105255431.png)
 
 发现url编码的问题估计是我自己本地的错误，题目url编码就可以，还有写错了变量（纯自己问题）
 
-![image-20230920175957134](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230920175957134.png)
+![](/img/10/image-20230920175957134.png)
 
 ```
 $e=new export();
@@ -211,13 +211,13 @@ get  connect
 
 ```
 
-![image-20230915112206920](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230915112206920.png)
+![](/img/10/image-20230915112206920.png)
 
 ```
 
 ```
 
-![image-20230915130646665](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230915130646665.png)
+![](/img/10/image-20230915130646665.png)
 
 ```
 打 badattru->jackson#tostring-->spring马
@@ -415,7 +415,7 @@ public class SpringInterceptor  extends AbstractTranslet implements HandlerInter
 }
 ```
 
-![image-20230915133149992](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230915133149992.png)
+![](/img/10/image-20230915133149992.png)
 
 ## 公交车司机
 
@@ -426,7 +426,7 @@ public class SpringInterceptor  extends AbstractTranslet implements HandlerInter
 但是解多了，队友直接A了
 ```
 
-![image-20230920103610221](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230920103610221.png)
+![](/img/10/image-20230920103610221.png)
 
 没想到直接找modbus流量，然后最后一位然后拼接成hex编码即可
 
