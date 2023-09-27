@@ -417,6 +417,34 @@ public class SpringInterceptor  extends AbstractTranslet implements HandlerInter
 
 ![](/img/10/image-20230915133149992.png)
 
+
+
+当时这道题的hashcode是手算的，最近在学python正好熟练一下，拿python脚本写一个
+
+```python
+import os
+import string
+def name(String):
+    sum=0
+    for i in String:
+        sum=sum*31+ord(i)
+    return sum
+
+a="0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ "
+for i in a:
+    for j in a:
+        if(name("welcomeplayctf")==name("welcomeplayc"+i+j)):
+            print("welcomeplayc"+i+j)
+
+welcomeplayctf
+welcomeplaycuG
+welcomeplaycv(
+```
+
+
+
+
+
 ## 公交车司机
 
 流量分析
