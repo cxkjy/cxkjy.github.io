@@ -2,7 +2,7 @@
 layout: post
 title: vulhub stapler
 categories: [blog ]
-tags: [Java,]
+tags: [渗透测试,]
 description: "测试"
 image:
   feature: windows.jpg
