@@ -80,11 +80,11 @@ public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
 
 ```
 
-![image-20230819174200675](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819174200675.png)
+![image-20230819174200675](..\img\final\image-20230819174200675.png)
 
 [浅谈SpringSecurity与CVE-2023-22602 - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/640655127)
 
-![image-20230819175751028](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819175751028.png)
+![image-20230819175751028](..\img\final\image-20230819175751028.png)
 
 所以说这道题
 
@@ -96,23 +96,23 @@ File file = new File("/tmp/" + path);
 
 ## ez_java_agagin
 
-![image-20230819212638191](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819212638191.png)
+![image-20230819212638191](..\img\final\image-20230819212638191.png)
 
 扫完目录也就一个DS_store泄露并没什么有用的东西。
 
 但是源码这两个url很奇怪，burp测一下功能
 
-![image-20230819212840640](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819212840640.png)
+![image-20230819212840640](..\img\final\image-20230819212840640.png)
 
 一个只能读取图片，一个回显
 
 must contain java and not have flag
 
-![image-20230819212907045](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819212907045.png)
+![image-20230819212907045](..\img\final\image-20230819212907045.png)
 
-![image-20230819215225628](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819215225628.png)
+![image-20230819215225628](..\img\final\image-20230819215225628.png)
 
-![image-20230819222350800](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819222350800.png)
+![image-20230819222350800](..\img\final\image-20230819222350800.png)
 
 WMCTF{wowowowoowow_you_can_decode_meeeeee!}
 
@@ -410,7 +410,7 @@ public class cc7 {
 }
 ```
 
-![image-20230910105232830](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230910105232830.png)
+![image-20230910105232830](..\img\final\image-20230910105232830.png)
 
 ### 找谁调用了`transform `   （lazymap#get)
 
@@ -540,23 +540,23 @@ Hashtable有一个Entry<?,?>[]类型的table属性，并且还是一个数组，
 
 为啥调用不到
 
-![image-20230910155922671](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230910155922671.png)
+![image-20230910155922671](..\img\final\image-20230910155922671.png)
 
-![image-20230910160548433](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230910160548433.png)
+![image-20230910160548433](..\img\final\image-20230910160548433.png)
 
-![image-20230910160555390](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230910160555390.png)
+![image-20230910160555390](..\img\final\image-20230910160555390.png)
 
-![image-20230910160603849](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230910160603849.png)
+![image-20230910160603849](..\img\final\image-20230910160603849.png)
 
 
 
-![image-20230910160613511](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230910160613511.png)
+![image-20230910160613511](..\img\final\image-20230910160613511.png)
 
 前面需要hashtable那个key的hash相同，如果这样的话传入lazymap.get(这里面就是那个hash key)
 
 比如就是下面这个 Aa和BB的hash相同，但是我们计划传入的是Rmiconnect这个对象，但是对象怎么可能hash相同
 
-![image-20230910160901109](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230910160901109.png)
+![image-20230910160901109](..\img\final\image-20230910160901109.png)
 
 
 
@@ -1038,15 +1038,15 @@ public class demo01 {
 
 这里✌用的是双层嵌套
 
-![image-20230926193851568](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230926193851568.png)
+![image-20230926193851568](..\img\final\image-20230926193851568.png)
 
 调试发现它再这里面循环了二次，也就是执行了二次setValue
 
-![image-20230926194504001](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230926194504001.png)
+![image-20230926194504001](..\img\final\image-20230926194504001.png)
 
 发现是这里的return entry.setValue(value)还会执行一遍本方法；	
 
-![image-20230926194849422](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230926194849422.png)
+![image-20230926194849422](..\img\final\image-20230926194849422.png)
 
 所以循环嵌套才是可以的，完美契合配上ConstTransfomer参数RM i也不会发生改变。
 
@@ -1054,7 +1054,7 @@ public class demo01 {
 
 因为高版本的就没这个setValue方法了导致调用不到后面的东西
 
-![image-20230926200603584](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230926200603584.png)
+![image-20230926200603584](..\img\final\image-20230926200603584.png)
 
 
 

