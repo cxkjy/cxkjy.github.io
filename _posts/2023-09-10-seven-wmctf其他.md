@@ -7,7 +7,7 @@ description: "当时禁了非常多的类"
 image:
   feature: windows.jpg
   credit: JYcxk
-  creditlink: https://github.com/
+  creditlink: azeril.com
  
 
 ---
