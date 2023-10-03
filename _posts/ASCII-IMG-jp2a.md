@@ -43,7 +43,7 @@ jp2a --color --html --background=dark img_name.jpg --width=1000 --output=img_nam
 
 如果想输出更为精细的图像，那么 output 就得设置为 html 网页格式。而后再由网页再提取具体的图像了。
 
-
+![image-20231003135359581](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231003135359581.png)
 
 
 
