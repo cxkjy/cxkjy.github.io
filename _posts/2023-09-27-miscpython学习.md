@@ -88,3 +88,6 @@ print(qrcode_parse_content("E:\\Tobby\\erwei.png")[0])
 JYcxk
 ```
 
+## [SUCTF2018]single dog
+
+一张图片010看见了txt直接分离
