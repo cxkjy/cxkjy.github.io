@@ -96,7 +96,7 @@ foremost att.jpg分离出一个 txt和zip
 
 txt是aaencode，解密即可
 
-![image-20231004100218591](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004100218591.png)
+![image-20231004100218591](..\img\final\image-20231004100218591.png)
 
 ## sqltest
 
@@ -106,7 +106,7 @@ wireshark流量分析，是一个sql布尔盲注的流量分析
 
 学一下拿脚本怎么实现（首先就是如何保存下来需要用到tshark)
 
-![image-20231004163410020](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004163410020.png)
+![image-20231004163410020](..\img\final\image-20231004163410020.png)
 
 tshark在 安装wireshark的时候就是自带的，我本地在 D:\misc\sharkwhie\Wireshark位置
 
@@ -146,7 +146,7 @@ for i in range(627,972):
 
 
 
-![image-20231004165440798](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004165440798.png)
+![image-20231004165440798](..\img\final\image-20231004165440798.png)
 
 从628行开始就是盲注字段的内容了，然后可以发现每次测位置的最后一个为真正的值，所以我们写脚本
 
@@ -174,7 +174,7 @@ for i in range(627,972):
             print(s)
 ```
 
-![image-20231004174102732](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004174102732.png)
+![image-20231004174102732](..\img\final\image-20231004174102732.png)
 
 这里需要注意的是记得 转int不然会报错  chr (int(i))  (自己加个括号即可)
 
@@ -186,4 +186,4 @@ for i in a:
 print(string)
 ```
 
-![image-20231004174049734](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004174049734.png)
+![image-20231004174049734](..\img\final\image-20231004174049734.png)
