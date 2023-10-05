@@ -187,3 +187,15 @@ print(string)
 ```
 
 ![image-20231004174049734](..\img\final\image-20231004174049734.png)
+
+## [ACTF新生赛2020]NTFS数据流
+
+打开之后是n个txt文件
+
+![image-20231005194522012](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005194522012.png)
+
+
+
+用这个软件即可直接扫出来
+
+![image-20231005195300144](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005195300144.png)
