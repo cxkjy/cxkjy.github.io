@@ -199,3 +199,9 @@ print(string)
 用这个软件即可直接扫出来
 
 ![image-20231005195300144](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005195300144.png)
+
+## [ACTF新生赛2020]swp
+
+一个流量包
+
+导出http对象，发现secret.zip
