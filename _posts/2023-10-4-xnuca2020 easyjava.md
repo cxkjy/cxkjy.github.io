@@ -167,11 +167,11 @@ public class test {
 
 可以在TreeMarshaller#convertAnother下断点
 
-![image-20231005161747935](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005161747935.png)
+![image-20231005161747935](..\img\final\image-20231005161747935.png)
 
 简单的说就是会根据数据类型获得相应的转换器，如果实现了序列化则是 SerializableConverter反之是ReflectionConverter转换器
 
-![image-20231005161736778](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005161736778.png)
+![image-20231005161736778](..\img\final\image-20231005161736778.png)
 
 `xml--->java`
 
@@ -205,9 +205,9 @@ public class ob {
 }
 ```
 
-![image-20231005162343256](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005162343256.png)
+![image-20231005162343256](..\img\final\image-20231005162343256.png)
 
-![image-20231005162646480](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005162646480.png)
+![image-20231005162646480](..\img\final\image-20231005162646480.png)
 
 发现执行了我们定义的readObject函数，这就是xstream的漏洞点，试想如果此时People是BadAttribute这些经典CC的类不就可以被rce了嘛（前提是需要有依赖）二个readobject都会被执行到。
 
@@ -336,7 +336,7 @@ public class ob {
 
 发现是可以通的
 
-![image-20231005163502022](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005163502022.png)
+![image-20231005163502022](..\img\final\image-20231005163502022.png)
 
 仔细跟进一下：
 
@@ -346,17 +346,17 @@ public class ob {
 
 在PriorityQueue#readObject 下个断点跟一下
 
-![image-20231005163835157](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005163835157.png)
+![image-20231005163835157](..\img\final\image-20231005163835157.png)
 
 这里调用了comparator.compare,返回看payload发现这里comparator已经赋值了
 
-![image-20231005164354373](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005164354373.png)
+![image-20231005164354373](..\img\final\image-20231005164354373.png)
 
-![image-20231005164228355](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005164231475.png)
+![image-20231005164228355](..\img\final\image-20231005164231475.png)
 
 接下来就是一系列的调用，最终会调用到 JdbcRowSetImpl的connect方法上
 
-![image-20231005164612897](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005164612897.png)
+![image-20231005164612897](..\img\final\image-20231005164612897.png)
 
 `这时想了一下如何写出来这个xml字符串的呢，莫非也是先通过java->xml然后再xml->java调用readobject？？？`
 
@@ -366,7 +366,7 @@ public class ob {
 
 拿cc2的链子直接打了一下发现果然是这样
 
-![image-20231005174653010](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005174653010.png)
+![image-20231005174653010](..\img\final\image-20231005174653010.png)
 
 可惜CC2+jndi网上没有现成的文章。。。需要手动调试（太难了）
 
@@ -374,7 +374,7 @@ public class ob {
 
 
 
-![image-20231005181310871](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005181310871.png)
+![image-20231005181310871](..\img\final\image-20231005181310871.png)
 
 
 
@@ -398,7 +398,7 @@ public class ob {
 
 u:0075
 
-![image-20231005170624880](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231005170624880.png)
+![image-20231005170624880](..\img\final\image-20231005170624880.png)
 
 
 
@@ -422,7 +422,7 @@ u:0075
 
 `因为在XmlFriendlyNameCoder#decodeName方法中会对16进制进行解析`
 
-![image-20231004201053269](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004201053269.png)
+![image-20231004201053269](..\img\final\image-20231004201053269.png)
 
 ```
 <org.s_.0070ringframework.aop.support.AbstractBeanFactoryPointcutAdvisor>
@@ -430,9 +430,9 @@ u:0075
 就是先把_之前的保存下来，然后截取_.之后的四位也就是 007016进制转化再拼接上
 ```
 
-![image-20231004201215274](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004201215274.png)
+![image-20231004201215274](..\img\final\image-20231004201215274.png)
 
-![image-20231004201237821](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004201237821.png)
+![image-20231004201237821](..\img\final\image-20231004201237821.png)
 
 #### 但是本地实验了一下直接改为16进制并没有成功，他也会进入到decodeName里面
 
@@ -440,9 +440,9 @@ u:0075
 
 推测是因为decodeName在实现过程转化的后面，调试一下
 
-![image-20231004205600147](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004205600147.png)
+![image-20231004205600147](..\img\final\image-20231004205600147.png)
 
-![image-20231004205632395](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231004205632395.png)
+![image-20231004205632395](..\img\final\image-20231004205632395.png)
 
 ### 针对标签属性内容的绕过
 
