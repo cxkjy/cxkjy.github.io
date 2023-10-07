@@ -205,3 +205,28 @@ print(string)
 一个流量包
 
 导出http对象，发现secret.zip
+
+## 喵喵喵
+
+开局一张图片，直接lsb
+
+这里没太理解，分为BGR信道，只有这个信道里面有图片
+
+![image-20231007200550049](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231007200550049.png)
+
+保存下来以后，直接save bin然后修改开头为
+
+89504E47  尾部 IEND即可，然后发现是一张一半的二维码
+
+改一下宽高即可
+
+![image-20231007201812478](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231007201812478.png)
+
+扫描二维码
+
+下载一个flag.rar,解压是一段文本
+
+```
+flag不在这里
+```
+
