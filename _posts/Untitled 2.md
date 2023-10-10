@@ -1,0 +1,379 @@
+# Real World CTF 3rd Writeup | Old System
+
+### 前言
+
+```java
+好久没做java题了，赶紧来来感觉
+这次打算复现的是一个rw题目，不知道自己能不能行，但是尽力
+    题目描述：
+    How to exploit the deserialization vulnerability in such an ancient Java environment ?
+    Java version: 1.4.2_19
+```
+
+### 首先自己分析一下
+
+代码不多，有用了就二个java类，看着名字就不简单的样子
+
+![image-20231009194336472](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009194336472.png)
+
+lib里面也就只有四个第三方库
+
+![image-20231009194601453](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009194601453.png)
+
+通过web.xml可以发现这个是通过tomcat的java web项目构建的
+
+
+
+```java
+public class ClassLoaderObjectInputStream extends ObjectInputStream {
+    private final ClassLoader classLoader;
+
+    public ClassLoaderObjectInputStream(ClassLoader classLoader, InputStream inputStream) throws IOException, StreamCorruptedException {
+        super(inputStream);
+        this.classLoader = classLoader;
+    }
+
+    @Override // java.io.ObjectInputStream
+    protected Class resolveClass(ObjectStreamClass objectStreamClass) throws IOException, ClassNotFoundException {
+        return Class.forName(objectStreamClass.getName(), false, this.classLoader);
+        //改为了false，不会触发static了
+    }
+
+    @Override // java.io.ObjectInputStream
+    protected Class resolveProxyClass(String[] strArr) throws IOException, ClassNotFoundException {
+        Class[] clsArr = new Class[strArr.length];
+        for (int i = 0; i < strArr.length; i++) {
+            clsArr[i] = Class.forName(strArr[i], false, this.classLoader);//反射获得类名属性
+        }
+        return Proxy.getProxyClass(this.classLoader, clsArr);
+    }
+}
+```
+
+`ObjectServlet.class`
+
+```java
+package org.rwctf;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+/* loaded from: ROOT.war:WEB-INF/classes/org/rwctf/ObjectServlet.class */
+public class ObjectServlet extends HttpServlet {
+    private ClassLoader appClassLoader;
+
+    public void init(ServletConfig servletConfig) throws ServletException {
+        File[] listFiles;//定义了一个Files数组
+        ObjectServlet.super.init(servletConfig);
+        String realPath = servletConfig.getServletContext().getRealPath("/");
+        File file = new File(new StringBuffer().append(realPath).append(File.separator).append("WEB-INF").append(File.separator).append(File.separator).append("lib").toString());
+        
+        if (file.exists() && file.isDirectory() && (listFiles = file.listFiles()) != null) {
+            URL[] urlArr = new URL[listFiles.length + 1];
+            for (int i = 0; i < listFiles.length; i++) {
+                if (listFiles[i].getName().endsWith(".jar")) {
+                    try {
+                        urlArr[i] = listFiles[i].toURI().toURL();
+                    } catch (MalformedURLException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            File file2 = new File(new StringBuffer().append(realPath).append(File.separator).append("WEB-INF").append(File.separator).append(File.separator).append("classes").toString());
+            if (file2.exists() && file2.isDirectory()) {
+                try {
+                    urlArr[urlArr.length - 1] = file2.toURI().toURL();
+                } catch (MalformedURLException e2) {
+                    e2.printStackTrace();
+                }
+            }
+            this.appClassLoader = new URLClassLoader(urlArr);
+        }
+    }
+
+    protected void doPost(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException, IOException {
+        PrintWriter writer = httpServletResponse.getWriter();
+        ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();//得到上下文类加载器
+        Thread.currentThread().setContextClassLoader(this.appClassLoader);//设置应用类加载器
+        try {
+            try {
+                ClassLoaderObjectInputStream classLoaderObjectInputStream = new ClassLoaderObjectInputStream(this.appClassLoader, httpServletRequest.getInputStream());
+                
+                Object readObject = classLoaderObjectInputStream.readObject();
+                //这里是一个反序列化
+                classLoaderObjectInputStream.close();
+                writer.print(readObject);
+                Thread.currentThread().setContextClassLoader(contextClassLoader);
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace(writer);
+                Thread.currentThread().setContextClassLoader(contextClassLoader);
+            }
+        } catch (Throwable th) {
+            Thread.currentThread().setContextClassLoader(contextClassLoader);
+            throw th;
+        }
+    }
+}
+```
+
+```
+卧槽看了和没看没啥区别，果真就看不懂，初始化也是。
+```
+
+这里给出了CC的版本
+
+```
+commons-beanutils 依赖版本是 1.6
+commons-collections:2.1
+```
+
+![image-20231009200752496](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009200752496.png)
+
+大体的可以看出就是根据，CC和CB的结合，在jdk1.4中拼接一条链子
+
+```
+导入进来以后发现，CC常用的一些 transformer类都没了，只能看CB了
+```
+
+![image-20231009203446824](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009203446824.png)
+
+想看PriorityQueue类有没有（网上下载了jdk1.4但是版本不兼容）所以不知道有没有这个PriorityQueue
+
+![image-20231009203841165](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009203841165.png)
+
+这里就看见了（看CB依赖看的，compare很重要的 毕竟比较就会调用——
+
+![image-20231009204909703](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009204909703.png)
+
+这里通过比对发下吗（jdk1.4里面是 compare）jdk1.7就是compareTo，并且没有PriorityQueue类
+
+![image-20231009211156248](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009211156248.png)
+
+所以我们需要找谁调用了TreeMap的get方法（这是目前唯一的思路）
+
+可以重点关注那些 Hashmap、hashset、hashtable
+
+(本来想的是hashmap反序列化，触发equals方法，然后equals。。只能到这了)
+
+```java
+TreeMap#get
+   TreeMap#getEntry 
+      BeanComparator#compare
+```
+
+看解析说是（以下均为jdk 1.4版本的内容）：
+
+AbstractMap.class
+
+```java
+ public boolean equals(Object o) {
+	if (o == this)
+	    return true;
+
+	if (!(o instanceof Map))//o必须是Map类型
+	    return false;
+	Map t = (Map) o;
+	if (t.size() != size())
+	    return false;
+
+        try {
+            Iterator i = entrySet().iterator();
+            while (i.hasNext()) {
+                Entry e = (Entry) i.next();
+                Object key = e.getKey();
+                Object value = e.getValue();
+                if (value == null) {
+                    if (!(t.get(key)==null && t.containsKey(key))) //
+                        return false;
+                } else {
+                    if (!value.equals(t.get(key)))  //这里会调用get
+                        //就直接  值.equals(我们传的map.get(key))   比如 map.put(a,b)  b.equals(map.get(a))
+                         //完美适应了调用 TreeMap.get（）
+                        return false;
+                }
+            }
+        } catch(ClassCastException unused)   {
+            return false;
+        } catch(NullPointerException unused) {
+            return false;
+        }
+
+	return true;
+    }
+```
+
+接下来就是找谁调用了equals方法这就简单了，直接看HashMap
+
+HashMap.java
+
+(可以看到低版本和高版本完全不一样，这里只有一个putForCreate方法)
+
+```java
+private void readObject(java.io.ObjectInputStream s)
+            throws IOException, ClassNotFoundException
+    {
+        // Read in the threshold, loadfactor, and any hidden stuff
+        s.defaultReadObject();
+
+        // Read in number of buckets and allocate the bucket array;
+        int numBuckets = s.readInt();
+        table = new Entry[numBuckets];
+
+        init();  // Give subclass a chance to do its thing.
+
+        // Read in size (number of Mappings)
+        int size = s.readInt();
+
+        // Read the keys and values, and put the mappings in the HashMap
+        for (int i=0; i<size; i++) {
+            Object key = s.readObject();
+            Object value = s.readObject();
+            putForCreate(key, value);  //这里调用下面  key和value可控
+        }
+    }
+```
+
+```java
+private void putForCreate(Object key, Object value) {
+        Object k = maskNull(key);//还是本来的key
+        int hash = hash(k);//key的hash
+        int i = indexFor(hash, table.length);
+
+        /**
+         * Look for preexisting entry for key.  This will never happen for
+         * clone or deserialize.  It will only happen for construction if the
+         * input Map is a sorted map whose ordering is inconsistent w/ equals.
+         */
+        for (Entry e = table[i]; e != null; e = e.next) {
+            if (e.hash == hash && eq(k, e.key)) {//套路还是相同一个hash相同  这里调用的是 二次的key
+                e.value = value;
+                return;
+            }
+        }
+
+        createEntry(hash, k, value, i);
+    }
+
+ static Object maskNull(Object key) {
+        return (key == null ? NULL_KEY : key);
+    }
+   static int indexFor(int h, int length) {
+        return h & (length-1);
+    }
+
+```
+
+```java
+static boolean eq(Object x, Object y) {
+        return x == y || x.equals(y);//我们需要调用的是 AbstractMap#equals  y需要是TreeMap对象
+                                     //t.get(key)  对象.key
+    }
+```
+
+![image-20231009215632214](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009215632214.png)
+
+![image-20231009215716172](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009215716172.png)
+
+![image-20231009215753857](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009215753857.png)
+
+### `总结以下目前的调用链子`
+
+```java
+HashMap#readObject 
+     HashMap#putForCreate
+          HashMap#eq
+             AbstractMap#equals
+                 TreeMap#get
+                     TreeMap#getEntry 
+                          BeanComparator#compare
+```
+
+绕hash(对key进行的hash)
+
+```java
+tree1=new TreeMap(,)
+tree2=new TreeMap(,)
+map=new HashMap()
+map.put(tree1,);
+map.put(tree2,);
+
+
+TreeMap treeMap1 = new TreeMap(comparator);
+treeMap1.put(payloadObject, "aaa");
+TreeMap treeMap2 = new TreeMap(comparator);
+treeMap2.put(payloadObject, "aaa");
+HashMap hashMap = new HashMap();
+hashMap.put(treeMap1, "bbb");
+hashMap.put(treeMap2, "ccc");
+```
+
+接下来就是如何rce了，从（ProperUtils在CB依赖中没影响）
+
+![image-20231009221032080](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009221032080.png)
+
+
+
+### 下面的jndi链接不仅使用于 jdk1.4还试用于jdk1.8
+
+前提是:
+
+```java
+而目前已经公开的利用类 TemplatesImpl 和 JdbcRowSetImpl 在 Java 1.4 的版本里都是没有的，所以如果要解决这个问题的话，没有捷径可走，只能够挖掘新的链。
+```
+
+从上面调用到的Beancompare--->可以到PropertyUtils中的一个invoke方法，可以看到获取类中的get方法反射调用，这里是无参调用
+
+1. 实现了Serializable接口
+2. 其某个getter方法里进行了敏感危险操作，而且是public修饰的getter方法（不能有参数 ）
+
+![image-20231010144712491](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010144712491.png)
+
+
+
+```
+com.sun.jndi.ldap.LdapAttribute
+```
+
+特别想用codeql语法来进行一个查询（但是构建数据库太麻烦了最后尝试尝试）
+
+codeql查询语句（如何查一个getter方法呢，方法名没有固定的值）
+
+怎么表达没有参数呃呃呃
+
+```java
+import java
+from Method method
+where method.hasName("")
+select method,method.getDeclartype
+```
+
+
+
+这是一个只有包权限的（final不能被继承的类）
+
+```java
+这里用的是
+com.sun.jndi.ldap.LdapAttribute这个类
+final class LdapAttribute extends BasicAttribute {
+ public DirContext getAttributeDefinition() throws NamingException {
+        DirContext var1 = this.getBaseCtx().getSchema(this.rdn);
+        return (DirContext)var1.lookup("AttributeDefinition/" + this.getID());
+    }
+```
+
+调用了lookup那么如果var1是InitialContext.java类型，就可以触发jndi注入了
+
+（`所以我们需要根以下看它是什么类型的，然后因为是包权限需要用反射来调用方法_)`
+
+但是这个context类型是（InitialDirContext类型的 ）
+
+![image-20231010153247755](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010153247755.png)
