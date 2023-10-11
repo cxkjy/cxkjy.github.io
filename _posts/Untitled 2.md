@@ -610,3 +610,12 @@ new Object[] {"name"});
 }
 ```
 
+
+
+
+
+参考链接：
+
+[Real World CTF 3rd Writeup | Old System (qq.com)](https://mp.weixin.qq.com/s/hXoUs4ZJgLHHaTvoyhwFxg)
+
+https://y4er.com/posts/real-wolrd-ctf-old-system-new-getter-jndi-gadget/
