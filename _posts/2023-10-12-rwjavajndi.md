@@ -8,9 +8,6 @@ image:
   feature: windows.jpg
   credit: JYcxk
   creditlink: azeril.com
- 
-
-
 ---
 
 # Real World CTF 3rd Writeup | Old System
@@ -169,7 +166,7 @@ commons-collections:2.1
 
 ![image-20231009204909703](..\img\final\image-20231009204909703.png)
 
-这里通过比对发下吗（jdk1.4里面是 compare）jdk1.7就是compareTo，并且没有PriorityQueue类
+`这里通过比对发下吗（jdk1.4里面是 compare）jdk1.7就是compareTo，并且没有PriorityQueue类`
 
 ![image-20231009211156248](..\img\final\image-20231009211156248.png)
 
@@ -309,7 +306,7 @@ HashMap#readObject
              AbstractMap#equals
                  TreeMap#get
                      TreeMap#getEntry 
-                          BeanComparator#compare
+                          BeanComparator#compare   ->getter方法
 ```
 
 绕hash(对key进行的hash)
@@ -383,6 +380,7 @@ final class LdapAttribute extends BasicAttribute {
         DirContext var1 = this.getBaseCtx().getSchema(this.rdn);
         return (DirContext)var1.lookup("AttributeDefinition/" + this.getID());
     }
+    InitialContext#lookup
 ```
 
 调用了lookup那么如果var1是InitialContext.java类型，就可以触发jndi注入了
@@ -731,6 +729,7 @@ jdk.PriorityQueue#readObject
      PriorityQueue#heapify
            PriorityQueue#siftDown
                 priorityQueue#siftDownUsingComparator
+    
                     CB.  BeanComparator#compare
                           cb      PropertyUtils#getproperty
                                      PropertyUtils#getNestedProperty
