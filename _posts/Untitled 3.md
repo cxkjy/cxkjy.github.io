@@ -15,7 +15,7 @@ class Node{
 
 此查询查找传递给新FileReader()的文件名
 
-感觉是这种 class FileReader()  
+### 感觉是这种 class FileReader()  ，获取它的有参构造 
 
 ```java
 import java 
@@ -27,7 +27,9 @@ where
  定义了一个java.io.FileReader的构造器，并且查询了第一个参数
 ```
 
-那如果我们使用本地数据流来查找流入参数的所有表达式：
+### 那如果我们使用本地数据流来查找流入参数的所有表达式：
+
+(这里我觉得应该是初始化这个类，调用构造器)
 
 ````java
 import java
@@ -43,4 +45,36 @@ where
 ````
 
 
+
+练习1：编写一个查询，查找用于创建java.net.URL，使用本地数据流。
+
+```java
+import java
+import seemle.code.java.dataflow.DataFlow
+
+from Constructor neturl,Call call, Expr src
+where 
+    neturl.getDeclaringType().hasQualifieldName("java.io","FileReader") and call.getCallee()=neturl and 
+    DataFlow::localFlow(DataFlow::exprNode(src),
+    DataFlow::exproNode(call.getArument(0)))
+        
+        select src
+```
+
+
+
+#### 调用不包含此格式的字符串函数
+
+```java
+import java
+import semmle.code.java.dataflow.DataFlow
+import semmle.code.java.StringFormat
+
+from StringFormatMethod format,MethodAccess call, Expr formatString
+where
+    call.getMethod()=format and call.getArgument(format.getFormatStringIndex())=formatString and 
+    not exists(DataFlow::Node source,DataFlow::Node sink | DataFlow::localFlow(source,sink) and source.adExpr() instanceof StringLiteral  and sink.asExpr()=formatString)
+    
+    select call,"Argument to String format method isn't hard-coded"
+```
 
