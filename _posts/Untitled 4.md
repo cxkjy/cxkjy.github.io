@@ -33,7 +33,7 @@ public class Person {
     public static String NAME = "doge";
     public String age;
 }
-这样就可以获得 doge
+这样就可以获得 doge的值
 ```
 
 ```java
@@ -48,5 +48,12 @@ public native long staticFieldOffset(Field f);
 getObject#
 public native Object getObject(Object o, long offset);
 通过给定的Java变量获取引用值。这里实际上是获取一个Java对象o中，获取偏移地址为offset的属性的值，此方法可以突破修饰符的抑制，也就是无视private、protected和default修饰符。类似的方法有getInt、getDouble等等。
+```
+
+```java
+var unsafe = getunsafe();
+var group = java.lang.Thread.currentThread().getThreadGroup();
+var f = group.getClass().getDeclaredField("threads");
+var threads = unsafe.getObject(group, unsafe.objectFieldOffset(f));
 ```
 
