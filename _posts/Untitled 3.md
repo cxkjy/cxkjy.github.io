@@ -61,8 +61,6 @@ where
         select src
 ```
 
-
-
 #### 调用不包含此格式的字符串函数
 
 ```java
@@ -74,7 +72,7 @@ from StringFormatMethod format,MethodAccess call, Expr formatString
 where
     call.getMethod()=format and call.getArgument(format.getFormatStringIndex())=formatString and 
     not exists(DataFlow::Node source,DataFlow::Node sink | DataFlow::localFlow(source,sink) and source.adExpr() instanceof StringLiteral  and sink.asExpr()=formatString)
-    
+   
     select call,"Argument to String format method isn't hard-coded"
 ```
 
