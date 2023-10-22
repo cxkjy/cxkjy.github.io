@@ -53,7 +53,7 @@ public class fast {
 
 ### 如果是直接给了一个readObject环境，如何测试是否出网
 
-第一反应肯定是通过urldns链子来尝
+第一反应肯定是通过urldns链子来尝d fd 
 
 ```java
 package fanshe;
