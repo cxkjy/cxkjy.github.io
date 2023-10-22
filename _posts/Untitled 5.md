@@ -19,7 +19,7 @@ payload1="Set[{\"@type\":\"java.net.URL\",\"val\":\"https://54i5v6.dnslog.cn\"}]
 
 其实上面的类也就一个就是，java.net.URL这个类，其他都是绕过方式,但是需要多尝试几次有的时候发包发不过去。
 
-可以打
+可以打ddfsfsfsfsdfd
 
 ```java
 package fanshe;
