@@ -76,3 +76,71 @@ where
     select call,"Argument to String format method isn't hard-coded"
 ```
 
+
+
+
+
+## 案例实现
+
+ ```java
+ 依旧是拿micro旧项目来改造，但是第一次加了 psvm执行方法，查询就报错了
+ 读了N篇文章，硬是没有一篇文章是自己创建的数据库，都是 git clone真不理解，自己把psvm去掉发现就可以了 
+ codeql database create X:\codeqldatabase\old1023 --language="java" --command="mvn clean install --file pom.xml" --source-root=X:\codeqldatabase\micro_service_seclab --overwrite
+ ```
+
+`很好理解，就是调用实例化FileReader对象的第一个参数`
+
+```java
+from Constructor fileReader, Call call
+where 
+  fileReader.getDeclaringType().hasQualifiedName("java.io", "FileReader")  and
+    //构造器 获取类型，如果它的权限类名为  java.io.FileReader
+  call.getCallee()=fileReader
+    //并且 被调用对象的名字是这个 fileReader
+select call.getArgument(0)    //获取参数
+```
+
+![image-20231022214514327](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231022214514327.png)
+
+### 这一种和上面的区别,这个会有一个指向的路径
+
+这个查询是从哪传参传过去的
+
+![image-20231022224111088](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231022224111088.png)
+
+从污染源 -->new FileReader，上面那个只获得了传递的参数
+
+```java
+import java
+import semmle.code.java.dataflow.DataFlow	
+ 
+from Constructor fileReader,Call call, Expr src
+where
+   fileReader.getDeclaringType().hasQualifiedName("java.io","FileReader") and call.getCallee()=fileReader and 
+    DataFlow::localFlow(DataFlow::exprNode(src),
+    DataFlow::exproNode(call.getArgument(0)))
+        
+     select src
+```
+
+### `查询出来的是到java.net.URL构造参数，的传参可控的`
+
+```java
+import java
+import semmle.code.java.dataflow.DataFlow
+from Constructor fileReader, Call call, Parameter p
+where
+ fileReader.getDeclaringType().hasQualifiedName("java.net",
+"URL") and
+ call.getCallee() = fileReader and
+ DataFlow::localFlow(DataFlow::parameterNode(p),
+DataFlow::exprNode(call.getArgument(0)))
+select p
+```
+
+![image-20231022223805848](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231022223805848.png)
+
+
+
+
+
