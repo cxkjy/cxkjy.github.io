@@ -1,9 +1,7 @@
-
-
 ```HTML
 layout: post
 title: JavaAgent学习
-categories: [blog ]
+categories: [blog]
 tags: [Java,]
 description: 探测
 image:
@@ -13,9 +11,13 @@ image:
 
 ```
 
+
+
 ```
 DASCTF月赛劝退要学RASP，所以需要先学JAVAAGent
 ```
+
+​	
 
 ### JavaAgent简介
 
