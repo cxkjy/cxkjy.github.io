@@ -1,8 +1,21 @@
 
 
+```HTML
+layout: post
+title: JavaAgent学习
+categories: [blog ]
+tags: [Java,]
+description: 探测
+image:
+  feature: windows.jpg
+  credit: JYcxk
+  creditlink: azeril.com
 
+```
 
-
+```
+DASCTF月赛劝退要学RASP，所以需要先学JAVAAGent
+```
 
 ### JavaAgent简介
 
