@@ -217,3 +217,8 @@ SomeClass object = kryo.readObject(input, SomeClass.class);
 ```
 
 这些方法首先都是找到合适的序列化器（serializer），再进行序列化或反序列化，序列化器会递归地调用这些方法。
+
+
+
+
+
