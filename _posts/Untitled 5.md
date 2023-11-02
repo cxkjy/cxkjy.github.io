@@ -541,3 +541,84 @@ mv2.visitEnd();
 
 Java程序中有三种基本控制结构：顺序、选择和循环，但转化为字节码后，只存在顺序和跳转两种指令
 
+这时候就要用到Label类了
+
+```java
+public class Test {
+    public boolean cmp(int flag) {
+        if (flag > 0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+}
+```
+
+![image-20231102110908372](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231102110908372.png)
+
+`ifile`表示当栈顶int类型数值小于等于0时跳转（判断条件为假），跳转的位置即后面跟的数字6，6这里表示相对偏移量。
+
+如果判断条件为假，即栈顶int类型数值小于等于0，则跳转到6，`iconst_0`表示把0这个常量压入operand stack，最后`ireturn`返回栈顶的int数据；如果判断条件为真，即栈顶int类型数值大于0，则顺序执行4、5，返回1
+
+```java
+public class Label {
+    // The offset of this label in the bytecode of its method
+	int bytecodeOffset;
+}
+```
+
+label类的bytecodeOffset即对应上面的相对偏移量
+
+通过调用 `MethodVisitor#visitLabel(label)来标记跳转目标`
+
+### Best Practice
+
+#### IF
+
+```java
+package example;
+public class HellWorld {
+    public void test(boolean flag) {
+        if (flag) {
+            System.out.println("value is true");
+        } else {
+            System.out.println("value is false");
+        }
+    }
+}
+```
+
+```java
+ ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+        cw.visit(V1_8,
+                ACC_PUBLIC,
+                "example/HellWorld",
+                null,
+                "java/lang/Object",
+                null);
+
+        {
+            MethodVisitor mv2 = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, "test", "()Ldemo/Dog;", null, null);
+
+            mv2.visitCode();//访问方法的字节码
+            mv2.visitTypeInsn(NEW, "demo/Dog");//使用mv2.visitTypeInsn指令创建了一个类型指令，它在堆上创建了一个新的对象。该指令将新对象的引用推送到操作数栈上。
+            mv2.visitInsn(DUP);//指令复制了刚刚创建的对象的引用，以备后续使用
+
+
+            mv2.visitLdcInsn("taco");//将字符串常量"taco"推送到操作数栈上
+            mv2.visitIntInsn(BIPUSH, 8);//指令将字节型整数常量8推送到操作数栈上。
+            mv2.visitMethodInsn(INVOKESPECIAL, "demo/Dog", "<init>", "(Ljava/lang/String;I)V", false);
+            //指令调用了对象的构造方法，初始化了demo.Dog类的一个实例。构造方法的签名为(Ljava/lang/String;I)V，表示接受一个java.lang.String和一个int类型的参数。
+            mv2.visitInsn(ARETURN);
+            //指令从方法中返回刚刚创建的demo.Dog对象。该指令将对象的引用从操作数栈中弹出，并将其作为方法的返回值。
+            mv2.visitMaxs(4, 2);//方法指定操作数栈和局部变量表的大小。
+            mv2.visitEnd();//方法结束对方法字节码的访问。
+        }
+```
+
+
+
+
+
+剩下的回来用到了再补上
