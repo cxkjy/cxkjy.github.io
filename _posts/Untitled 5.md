@@ -1,56 +1,543 @@
-## ByteCode
+## 前言
 
-在字节码中，所有变量和方法都是以符号引用的形式保存在class文件的常量池中。字节码被类加载器加载后，class文件中的常量池会被加载到方法区的运行时常量池，动态链接会将运行时常量池中的符号引用转化为调用方法的直接引用。
+https://p4d0rn.gitbook.io/java/rasp/asm/asm0
 
 ```java
-package com.demo.asm;
+本来看的这篇文章但是有些高深，一开始看不懂只能通过上一篇的文章过渡一下，这篇文章会主要介绍ASM是什么以及功能。
+```
 
-public class Test {
-    private int num = 1;
-    public static int NUM = 100;
+## ASM 是什么
 
-    public int func(int a, int b) {
-        return add(a, b);
-    }
+```java
+ASM是一个操作Java字节码的类库
+```
 
-    public int add(int a, int b) {
-        return a + b + num;
-    }
+一个`.java`文件经过Java编译器（`javac`）编译之后会生成一个`.class`文件，`.class`文件中存储的是字节码（ByteCode）数据，ASM所操作的对象即字节码（ByteCode）
 
-    public int sub(int a, int b) {
-        return a - b - NUM;
+字节码文件是具有一定格式的文件，ASM首先将字节码拆分为多个部分(decompose)，再对某一部分的信息进行修改(modify)，最后将多个部分重新组织为一个新的字节码(recompose)。
+
+既然ASM是操作字节码的工具，而字节码的生成又和Java版本有关，因此需要注意ASM版本和Java版本的兼容，尽量选择较高的ASM版本
+
+## ASM能做什么
+
+1. generation: 创建新的字节码
+2. transformation: 对已有字节码进行变换
+3. analysis: 对已有字节码进行分析
+
+## ASM Structure
+
+ASM主要分成而部分：
+
+![image-20231101194010017](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231101194010017.png)
+
+### Core API
+
+asm.jar
+
+最重要的三个类：
+
+1. ClassReader: 读取字节码文件，并拆分为不同的部分（decompose）
+2. ClassVisitor: 对字节码中某一部分进行修改（modify)
+3. ClassWriter: 将各个部分重组为完整的字节码文件（recompose）
+
+对已有类进行修改，需要这三个类的参与。
+
+对应的还有`Fieldvisitor、FieldWriter和MethodVisitor、MethodWriter`
+
+![image-20231101194938492](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231101194938492.png)
+
+```java
+根据上一篇文章的介绍，这里很容易看明白
+```
+
+## Class Generation
+
+对于字节码的generation，主要是ClassVisitor和ClassWriter的参与，ClassReader将在transform部分介绍。
+
+### ClassVisitor
+
+`ClassVisitor`是一个抽象类，不能直接new，它有两个常用的子类分别是`ClassWriter（Core API)和ClassNode(Tree API)`
+
+```java
+public class ClassWriter extends ClassVisitor
+public class ClassNode extends ClassVisitor
+```
+
+#### ClassVisitor定义两个字段api和cv
+
+```java
+public abstract class ClassVisitor {
+    /**
+   * The ASM API version implemented by this visitor. The value of this field must be one of Opcodes
+   */
+    protected final int api;
+
+    /** The class visitor to which this visitor must delegate method calls. May be null. */
+    protected ClassVisitor cv;
+
+    public ClassVisitor(final int api, final ClassVisitor classVisitor) {
+        this.api = api;
+        this.cv = classVisitor;
     }
 }
 ```
 
-javap -c Test.class
+1. `api`指定当前使用的ASM版本，取值为`Opcodes.ASM4 ~ Opcodes.ASM9`，这里的版本是ASM9（这里不就是int类型，上篇文章用的5）
+2. `cv`也是一个ClassVisitor,用来连接多个ClassVisitor
 
-javap是java Class文件分解器，可以用于反编译，也可以用于查看字节码
+#### 四个关键的方法
 
--c 输出类中的所有方法以及字节码信息
-
-```java
-public com.demo.asm.Test();
-    Code:
-       0: aload_0
-       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
-       4: aload_0
-       5: iconst_1
-       6: putfield      #2                  // Field num:I
-       9: return
+```
+ClassVisitor`中定义了很多`visitXxx`方法，这里使用了访问者模式。主要看四个方法：`visit()`、`visitField()`、`visitMethod()`、`visitEnd()
+(上篇也基本用过，但是没太懂定义)
 ```
 
-- 左边的数字表示每个指令的偏移量，保存在PC程序计数器中
-- 中间为JVM指令的助记符
-- 右边#1、#2 表示操作数
+### 在字节码中，描述符是对类型的简单化描述
+
+1. 对于字段，描述符即字段本身的类型
+2. 对于方法，描述符为方法接受的参数类型和返回值的类型
+
+| Java 类型             | ClassFile 描述符                                    |
+| --------------------- | --------------------------------------------------- |
+| `boolean`             | `Z`（Z 表示 Zero，零表示 `false`，非零表示 `true`） |
+| `byte`                | `B`                                                 |
+| `char`                | `C`                                                 |
+| `double`              | `D`                                                 |
+| `float`               | `F`                                                 |
+| `int`                 | `I`                                                 |
+| `long`                | `J`                                                 |
+| `short`               | `S`                                                 |
+| `void`                | `V`                                                 |
+| `non-array reference` | `L<InternalName>;`                                  |
+| `array reference`     | `[`                                                 |
+| `String`              | `Ljava/lang/String;`                                |
+| `Object`              | `Ljava/lang/Object;`                                |
+| `void`                | `V`                                                 |
+
+另外，对于`visitMethod`的第二个参数`name`，若我们要生成构造方法，这里固定为`<init>`；若要生成静态代码块，`name`为`<clinit>`，`signature`为`()V ` 
+
+```java
+ublic MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+```
+
+这四个方法的内部都是调用的`cv.visitXxx()`
+
+![image-20231101200910074](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231101200910074.png)
+
+并且都是有顺序的，这里只举例列出我们需要用到的
+
+1. []表示最多调用一次
+2. *表示调用0次或多次
+3. （）和 | 表示可以任选一个方法，不分先后顺序
+
+```java
+visit
+(
+ visitField |
+ visitMethod
+)*
+visitEnd
+就是开始时 visit方法会调用一次，剩下的字段和方法根据 java内容多少调用，最后调用一次visitEnd
+```
+
+### ClassWriter
+
+这个方法顾名思义，就是写文件的类(既然写文件一定会搭配toByteArray）
+
+![image-20231101202212532](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231101202212532.png)
+
+```java
+/*
+A ClassVisitor that generates a corresponding ClassFile structure, as defined in the Java Virtual Machine Specification (JVMS). It can be used alone, to generate a Java class "from scratch", or with one or more ClassReader and adapter ClassVisitor to generate a modified class from one or more existing Java classes.
+*/
+public class ClassWriter extends ClassVisitor{
+    public static final int COMPUTE_MAXS = 1;
+    public static final int COMPUTE_FRAMES = 2;
+```
+
+只列出重要的内容，上篇文章由于我们的stack值的错误，导致编译错误。
+
+当时修改就是用的COMPUTE_MAXS说是能自动匹配，
+
+ `COMPUTE＿ＭAXS`
+
+```java
+COMPUTE_MAXS：用于自动计算方法的最大堆栈大小和最大局部变量数的标志
+MethodVisitor.visitFrame 方法的调用，并从方法字节码重新计算堆栈映射帧。
+```
+
+```
+COMPUTE_FRAMES`包含了`COMPUTE_MAXS`的功能，不仅计算`max stack size`和`max local variables`，还计算`stack map frames`，所以一般都使用`COMPUTE_FRAMES
+```
+
+注意：虽然这个字段能够自动计算，但代码中仍要调用`visitMaxs`，否则会报错
+
+使用`ClassWriter`创建一个字节码文件，分为三步：
+
+1. 创建`ClassWriter`对象
+2. 调用`ClassWriter#visitXxx`方法
+3. 调用`ClassWriter#toByteArray`方法
+
+##### 例子
+
+```java
+package sample;
+public class HelloWorld {
+    public static final int NUM = 17;
+    public String name;
+
+    public HelloWorld() {
+    }
+
+    public int hi(Object a) {
+        return 6;
+    }
+}
+```
+
+```java
+package demo;
+import com.sun.org.apache.xml.internal.security.utils.JavaUtils;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.MethodVisitor;
+import static org.objectweb.asm.Opcodes.*;
+public class Test {
+    public static void main(String[] args) {
+        JavaUtils.writeBytesToFilename("HelloWorld.class",dump());
+    }
+    public static byte[] dump(){
+        ClassWriter cw=new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+        cw.visit(V1_8,     // version Java8
+                ACC_PUBLIC,   // access flag
+                "sample/HelloWorld",  // name - Internal Name
+                null,   // signature
+                "java/lang/Object",    // superName
+                null);    // interfaces         指定的是那个类
+        //接下来指定静态变量 NUM
+        {//    public static final int NUM = 17;
+            FieldVisitor fv1 = cw.visitField(ACC_PUBLIC + ACC_FINAL + ACC_STATIC, // access flag
+                    "NUM", // name
+                    "I",  // descriptor
+                    null,  // signature
+                    17);   // value , could be null
+            fv1.visitEnd();
+        }
+        {//     public String name;
+            FieldVisitor fv2 = cw.visitField(ACC_PUBLIC, // access flag
+                    "name", // name
+                    "Ljava/lang/String",  // descriptor
+                    null,  // signature
+                    null);   // value , could be null
+            fv2.visitEnd();
+        }
+//public HelloWorld() {  准备构建无参构造方法
+//    }
+        {
+            MethodVisitor mv1 = cw.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+            mv1.visitEnd();
+        }
+// public int hi(Object a) {
+//        return 6;
+//    }   难度在于有return  返回值
+
+        {
+            MethodVisitor mv2 = cw.visitMethod(ACC_PUBLIC, "hi", "(Ljava/lang/Object;)I", null, null);
+            //上面第三个，Ljava/lang/Object； I  没看懂，  int(Object a) 这部分没实现， 强制理解为 I 就是 类型  a形参确实也不重要
+            mv2.visitLdcInsn(6);
+            mv2.visitInsn(IRETURN);
+            mv2.visitEnd();
+        }
+
+        cw.visitEnd();
+        return cw.toByteArray();
+    }
+}
+```
+
+这里别的文章推荐IDEA插件 ASM Bytecode Viewer生成（暂时还没了解）
+
+### FieldVisitor
+
+`ClassVisitor#visitField`返回了一个`FieldVisitor`对象，和`ClassVistor`类很像
+
+```java
+// A visitor to visit a Java field.
+public abstract class FieldVisitor {//是一个抽象类
+    protected final int api;
+    protected FieldVisitor fv;
+    public FieldVisitor(final int api) {
+        this(api, null);
+    }
+     public void visitEnd()
+}
+```
+
+`FieldVisitor`调用`visitXxx`也遵循一定的调用顺序
+
+```java
+FieldVisitor调用visitXxx也遵循一定的调用顺序
+```
+
+### FieldWriter
+
+`ClassVisitor#visitField`的实现就是通过`FieldWriter`(父类为`FieldVisitor`)来实现的
+
+```java
+// ClassWriter#visitField
+@Override
+public final FieldVisitor visitField(
+    final int access,
+    final String name,
+    final String descriptor,
+    final String signature,
+    final Object value) {
+    FieldWriter fieldWriter =
+        new FieldWriter(symbolTable, access, name, descriptor, signature, value);
+    if (firstField == null) {
+        firstField = fieldWriter;
+    } else {
+        lastField.fv = fieldWriter;
+    }
+    return lastField = fieldWriter;
+}
+```
+
+在`toByteArray`方法中也用到了`FieldWriter`的两个方法`computeFieldInfoSize()`和`putFieldInfo()`
+
+### MethodVisitor
+
+`ClassVisitor#visitMethod`返回了一个`MethodVisitor`对象，和`ClassVistor`类很像。
+
+```java
+// A visitor to visit a Java method
+public abstract class MethodVisitor {
+    protected final int api;
+    protected MethodVisitor mv;
+    public MethodVisitor(final int api) {
+        this(api, null);
+    }
+}
+```
+
+```java
+(visitParameter)*
+[visitAnnotationDefault]
+(visitAnnotation | visitAnnotableParameterCount | visitParameterAnnotation | visitTypeAnnotation | visitAttribute)*
+[
+    visitCode
+    (
+        visitFrame |
+        visitXxxInsn |
+        visitLabel |
+        visitInsnAnnotation |
+        visitTryCatchBlock |
+        visitTryCatchAnnotation |
+        visitLocalVariable |
+        visitLocalVariableAnnotation |
+        visitLineNumber
+    )*
+    visitMaxs
+]
+visitEnd
+```
+
+`visitCode()`和`visitMaxs()`之间的方法主要负责当前方法的方法体中opcode内容
+
+### MethodWriter
+
+`ClassVisitor#visitMethod`的实现就是通过`MethodWriter`(父类为`MethodVisitor`)来实现的，这时候初始化了方法头的信息
+
+![image-20231101211022697](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231101211022697.png)
+
+```java
+@Override
+public final MethodVisitor visitMethod(
+    final int access,
+    final String name,
+    final String descriptor,
+    final String signature,
+    final String[] exceptions) {
+    MethodWriter methodWriter =
+        new MethodWriter(symbolTable, access, name, descriptor, signature, exceptions, compute);
+    if (firstMethod == null) {
+        firstMethod = methodWriter;
+    } else {
+        lastMethod.mv = methodWriter;
+    }
+    return lastMethod = methodWriter;
+}
+```
+
+```java
+发现了规律，这几个方法都有一个 Visitor和Writer一对，猜测一个是访问触发事件，一个是写入对应的东西
+```
+
+### 例子
+
+```java
+package sample;
+
+public class HellWorld {
+    static {
+        System.out.println("static block");
+    }
+    public HellWorld() {
+        super();
+    }
+}
+这个例子的难点就是静态代码块？无参构造调用父类？
+```
+
+```java
+    public static byte[] dump() throws Exception {
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+        cw.visit(V1_8,
+                ACC_PUBLIC,
+                "example/HellWorld",
+                null,
+                "java/lang/Object",
+                null);
 
 
+        {
+            // public HellWorld() {
+            //        super();
+            //    }
+            MethodVisitor mv1 = cw.visitMethod(ACC_PUBLIC,
+                    "<init>",
+                    "()V",
+                    null,
+                    null);//这里声明了一个无参构造方法
 
 
+            mv1.visitCode();
+            mv1.visitVarInsn(ALOAD, 0);   // push locals[0] to operand stack
+            mv1.visitMethodInsn(INVOKESPECIAL,  // call method of super class
+                    "java/lang/Object",//触发父类object的无参构造
+                    "<init>", "()V",
+                    false);
+            mv1.visitInsn(RETURN);
+            mv1.visitMaxs(1, 1);//压栈操作
+            mv1.visitEnd();
+        }
+//static {
+//        System.out.println("static block");
+//    }
+
+        {
+            MethodVisitor mv2 = cw.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
+            //一个静态方法
+            mv2.visitCode();
+            mv2.visitFieldInsn(GETSTATIC,   // get static field
+                    "java/lang/System", "out", "Ljava/io/PrintStream;");
+            mv2.visitLdcInsn("static block");
+            mv2.visitMethodInsn(INVOKEVIRTUAL,    // call method of instance
+                    "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+            mv2.visitInsn(RETURN);
+            mv2.visitMaxs(2, 0);
+            mv2.visitEnd();
+        }
+        cw.visitEnd();
+        return cw.toByteArray();
+    }
+}
+//就是这个   mv2.visitMaxs(2, 0);不太难看懂
+```
+
+### Challenge2
+
+假设有一个dog类
+
+```java
+package demo;
+
+public class Dog {
+    public String name;
+    public int age;
+
+    public Dog(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
+
+    @Override
+    public String toString() {
+        return "Dog{" +
+                "name='" + name + '\'' +
+                ", age=" + age +
+                '}';
+    }
+}
+```
+
+生成如下类：
+
+```java
+package sample;
+
+import demo.Dog;
+
+public class HellWorld {
+    public static Dog test() {
+        return new Dog("taco", 8);
+    }
+}
+```
+
+```java
+ {
+            MethodVisitor mv2 = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, "test", "()Ldemo/Dog;", null, null);
+
+            mv2.visitCode();//访问方法的字节码
+            mv2.visitTypeInsn(NEW, "demo/Dog");//使用mv2.visitTypeInsn指令创建了一个类型指令，它在堆上创建了一个新的对象。该指令将新对象的引用推送到操作数栈上。
+            mv2.visitInsn(DUP);//指令复制了刚刚创建的对象的引用，以备后续使用
 
 
+            mv2.visitLdcInsn("taco");//将字符串常量"taco"推送到操作数栈上
+            mv2.visitIntInsn(BIPUSH, 8);//指令将字节型整数常量8推送到操作数栈上。
+            mv2.visitMethodInsn(INVOKESPECIAL, "demo/Dog", "<init>", "(Ljava/lang/String;I)V", false);
+            //指令调用了对象的构造方法，初始化了demo.Dog类的一个实例。构造方法的签名为(Ljava/lang/String;I)V，表示接受一个java.lang.String和一个int类型的参数。
+            mv2.visitInsn(ARETURN);
+            //指令从方法中返回刚刚创建的demo.Dog对象。该指令将对象的引用从操作数栈中弹出，并将其作为方法的返回值。
+            mv2.visitMaxs(4, 2);//方法指定操作数栈和局部变量表的大小。
+            mv2.visitEnd();//方法结束对方法字节码的访问。
+        }
+```
 
+### challenge3
 
+```java
+package sample;
 
+public class HellWorld {
+    public static void test(int a, int b) {
+        int val = Math.max(a, b);
+        System.out.println(val);
+    }
+}
+```
 
+可以借用  javap -verbose HellWorld，反向操作一波，对应起来很简单
+
+![image-20231102110058268](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231102110058268.png)
+
+```java
+MethodVisitor mv2 = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, "test", "(II)V", null, null);
+mv2.visitCode();
+mv2.visitVarInsn(ILOAD, 0);
+mv2.visitVarInsn(ILOAD, 1);
+mv2.visitMethodInsn(INVOKESTATIC, "java/lang/Math", "max", "(II)I", false);
+mv2.visitVarInsn(ISTORE, 2);
+mv2.visitFieldInsn(GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+mv2.visitVarInsn(ILOAD, 2);
+mv2.visitMethodInsn(INVOKEVIRTUAL, "java/io/PrintStream", "println", "(I)V", false);
+mv2.visitInsn(RETURN);
+mv2.visitMaxs(2, 3);
+mv2.visitEnd();
+```
+
+### Label
+
+Java程序中有三种基本控制结构：顺序、选择和循环，但转化为字节码后，只存在顺序和跳转两种指令
 
