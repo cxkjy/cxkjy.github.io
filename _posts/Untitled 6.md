@@ -367,7 +367,7 @@ protected void onMethodExit(final int opcode) {}
 
 ## 个人理解总结
 
-看了这几篇文章本质上就是找到方法、字段的调用顺序，然后根据顺序添加代码
+看了这几篇文章本质上就是找到方法、字段的调用顺序，然后根据顺序添加代码（对应方法修改字节码！！！）
 
 `MethodVisitor`
 
@@ -444,16 +444,16 @@ public class AddTimerClassVisitor extends ClassVisitor {//写了一个类继承C
                 public void visitInsn(int opcode) {
 //这里为啥这么写，因为这条语句在return上，首先判断是否是 return  throw 也就是最后一句
                     if ((opcode >= IRETURN && opcode <= RETURN) || opcode == ATHROW) {
-                        
+                        //因为上面已经打开了字节码这里就不需要了
                         mv.visitFieldInsn(GETSTATIC, mOwner, "timer", "J");
                         mv.visitMethodInsn(INVOKESTATIC, "java/lang/System",
                                 "currentTimeMillis", "()J");
                         mv.visitInsn(LADD);//从操作数栈中弹出long类型的值   加法
                         mv.visitFieldInsn(PUTSTATIC, mOwner, "timer", "J");
                     }
-                    mv.visitInsn(opcode);
+                    mv.visitInsn(opcode);//将指定的字节码指令添加到生成的字节码中
 
-                }
+                }//先添加方法 再添加 return
             };
             return newMethodVisitor;
         }
@@ -475,5 +475,86 @@ public class AddTimerClassVisitor extends ClassVisitor {//写了一个类继承C
 
 ```
 
+```java
+😭不知✌们有没有和我一样的想法，这样难道不会影响本来class文件中有的方法嘛？其实并不会的它做了二套方案，一套调用父类，一套自己重写，并且有判断，完全是我多虑了。
+方法没返回值是，RETURN
+    有返回值是，IRETURN
+       抛出异常是，ATHROW
+```
 
+ ``这种会把每个方法都会调用到，符合了我的猜测！！！``
+
+![image-20231102225137945](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231102225137945.png)
+
+```java
+public class ClassWriterTest {
+
+    public static void main(String[] args) throws Exception {
+        Class clazz = C.class;
+        String clazzFilePath = Utils.getClassFilePath(clazz);
+        ClassReader classReader = new ClassReader(new FileInputStream(clazzFilePath));
+
+        ClassWriter classWriter = new ClassWriter(0);//这里改成什么大家应该都知道了叭（必然是COMPUTE_FRAMES）
+        
+        AddTimerClassVisitor addTimerClassVisitor = new AddTimerClassVisitor(Opcodes.ASM5, classWriter);
+        classReader.accept(addTimerClassVisitor, 0);//这里0代表什么？全部指令😁
+
+        // 写入文件
+        byte[] bytes = classWriter.toByteArray();
+        FileOutputStream fos = new FileOutputStream("/Users/zhy/Desktop/copyed.class");
+        fos.write(bytes);
+        fos.flush();
+        fos.close();
+
+    }
+}
+```
+
+![image-20231102224336987](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231102224336987.png)
+
+​	
+
+`进阶的内容`
+
+```java
+{
+    MethodVisitor mv2 = cw.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
+    //clinit 静态代码
+    
+    mv2.visitCode();//开启字节码
+    mv2.visitFieldInsn(GETSTATIC,   // get static field
+                       "java/lang/System", "out", "Ljava/io/PrintStream;");
+    //获取java/lang/System类的out字段（代表标准输出流）。
+    
+    
+    //System.out.println("static block");
+    
+    mv2.visitLdcInsn("static block");  //这里是添加内容
+    //mv2访问器加载常量（LDC）指令，将字符串"static block"加载到操作数栈中。
+    
+    
+    
+    
+    mv2.visitMethodInsn(INVOKEVIRTUAL,    // call method of instance
+                        "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+    // mv2访问器调用实例方法（INVOKEVIRTUAL），调用java/io/PrintStream类的println方法（用于打印字符串）
+    //而false代表参数是否是接口类型的标志位。在这个指令中，参数(Ljava/lang/String;)V表示该方法接受一个字符串类型的参数，并且没有返回值。
+    
+    mv2.visitInsn(RETURN);//return返回
+    mv2.visitMaxs(2, 0);//
+    mv2.visitEnd();
+}
+```
+
+```java
+package sample;
+public class HellWorld {
+    static {
+        System.out.println("static block");
+    }
+    public HellWorld() {
+        super();
+    }
+}
+```
 
