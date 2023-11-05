@@ -251,3 +251,150 @@ Can-Retransform-Classes: true
 
 防御手段：继续底层修改字节码🤑🤑🤑
 
+```java
+这里问了问学长，那RASP直接把底层命令执行的字节码全换了不就行了嘛
+🤬:但是有些实现了公司业务功能咋办
+有道理，那咋办，RASP不能用了？
+🙄：污点分析看数据源，比如来自jndi或者反序列化就hook了
+soga涨知识了
+```
+
+
+
+## 终终于成功了👀👀👀
+
+![image-20231105121349414](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105121349414.png)
+
+```java
+ <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Premain-Class>com.demo.rasp.agent.RaspAgent</Premain-Class>
+     <!--<Agent-Class>com.demo.agent.MyAgent</Agent-Class>-->
+                            <Can-Redefine-Classes>true</Can-Redefine-Classes>
+                            <Can-Retransform-Classes>true</Can-Retransform-Classes>
+                        </manifestEntries>
+                    </archive>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+```
+
+```java
+Premain-Class：包含premain方法的类，需要配置为类的全路径
+Agent-Class：包含agentmain方法的类，需要配置为类的全路径
+Can-Redefine-Classes：为true时表示能够重新定义Class
+Can-Retransform-Classes：为true时表示能够重新转换Class，实现字节码替换
+Can-Set-Native-Method-Prefix：为true时表示能够设置native方法的前缀
+```
+
+直接点生命周期的package进行打包即可
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## java通过JNI调用DLL文件
+
+#### JNI简介
+
+```java
+JNI是Java Natice Interface的缩写，它提供了若干的API实现了Java和其他语言的通信（主要是C&C++)。允许Java代码和其他语言写的代码进行交互。JNI是JDK提供的一个native编程接口。JNI允许Java程序调用其他语言编写的程序库或者代码库，比如C/C++。Java在内存管理和性能上有一定的局限，通过JNI我们就可以利用Native程序来克服这些限制
+```
+
+具体示例：
+
+##### 1、写一个Java调用c的加减乘除的dll文件
+
+```java
+public class HelloWorld {
+private native void print();
+static
+{
+System.loadLibrary("Hello");
+}
+public static void main(String[] args) {
+new HelloWorld().print();
+}
+}
+```
+
+##### **2、对你写好的这个java进行编译成class文件**
+
+javac HelloWorld.java
+
+##### **3、使用javah命令生成c所需要的头文件**
+
+**注意：没有.class 而且 如果有包名的话 记得要把包名也写上**.       javah  com.li.dll.JToD11
+
+##### **4、使用vs2017创建dll动态链接库**
+
+但是我的vs不太会用，直接用DEVc++来实现了
+
+文件->新建项目->
+
+![image-20231105115231521](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105115231521.png)
+
+把里面的dll.h换成 刚才我们javah生成的内容
+
+#include "jni.h" 这里记得换成""而不是<>
+
+然后把c文件的内容换成
+
+```java
+#include "jni.h"  //这是环境变量java jdk中的
+#include<stdio.h> 
+#include "dll.h"  //就是刚才我们的h
+JNIEXPORT void JNICALL
+Java_HelloWorld_print(JNIEnv *env, jobject obj)
+{
+printf("Hello World!");
+return;
+}
+```
+
+直接编译，修改报错，需要把jdk中的两个文件，jni.h和jni_md.h拖进文件中
+
+![image-20231105115632945](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105115632945.png)
+
+就会生成一个新的dll文件
+
+（这里遇到了个坑，System.loadLibrary("Hello");如果用这个函数会去环境变量jdk的bin目录找Hello.dll，如果是load("绝对路径")）
+
+终于成功了
+
+![image-20231105114308571](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105114308571.png)
+
+```java
+所以我们之前看的java中的native方法，就会有一个动态链接库.dll文件去实现它。
+```
+
