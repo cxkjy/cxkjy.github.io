@@ -309,17 +309,309 @@ Can-Set-Native-Method-Prefix：为true时表示能够设置native方法的前缀
 
 直接点生命周期的package进行打包即可
 
+![image-20231105195637953](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105195637953.png)
+
+看一下报错，NoClassDefFoundError,hook到方法了，就是修改字节码时出错了，找不到我们自定义的`ProcessImplThrow`类
+
+这里通过源码可以看到我们输出了hooked，在后面修改字节码调用ProcessImplThrow的时候出的错误
+
+![image-20231105201803143](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105201803143.png)
+
+```java
+ protected void onMethodEnter() {
+                    mv.visitVarInsn(ALOAD, 0);
+                    super.visitMethodInsn(INVOKESTATIC, "com/demo/rasp/protection/ProcessImplThrow", "protect", "([Ljava/lang/String;)V", false);
+                }
+            };
+```
+
+看✌文章说是，NoClassDefFoundError是字节码找到了，但加载时出错了。那就看一下加载器
+
+```java
+        System.out.println(Class.forName("com.demo.rasp.protection.ProcessImplThrow").getClassLoader());//写入hook中
+
+```
+
+![image-20231105204535576](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105204535576.png)
+
+可以发现是同一个类加载器-————系统类加载器（也成为应用程序类加载器）
+
+注意到我们的`ProcessImplThrow#protect`是由`ProcessImpl#start`去调用的，这个类是由BootStrap去加载的。根据双亲委派模型，类加载时会先交给其parent去加载，若parent加载不了，再由自己加载。BootStrapClassLaoder已经是最顶上的类加载器了，其搜索范围是<JAVA_HONE>\lib，这是找不到我们的classpath下的类。因此我们需要把这个rasp jar包的位置添加到BootStrapClassLoader的搜索路径中。`Instrumentation`刚好提供了一个方法`appendToBootstrapClassLoaderSearch`来实现这点。
+
+```java
+简单的阐述一下： ProcessImpl#start 是启动类加载器加载的（为什么？因为它是在AVA_HOME的lib目录,双亲委派加载，一直会让父加载器加载，而Bootstrap加载器能调用），但是却找不到这个ProcessImplThrow#protect,因为它没在lib目录中，所以我们采取一种方法让RASPjar包添加进目录即可
+这时候你可能提问 能识别jar包嘛？一张图解释🙈🙈🙈
+```
+
+![image-20231105213631611](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105213631611.png)
+
+### 所以i我们现在就是想如何把这个RASP jar包添加进lib目录中
+
+实际上OpenRasp用的就是这个来解决。
+
+```java
+// premain
+addJarToBootStrap(inst);
+// =====================
+public static void addJarToBootStrap(Instrumentation inst) {
+    URL localUrl = RaspAgent.class.getProtectionDomain().getCodeSource().getLocation();
+    try {
+        String path = URLDecoder.decode(
+            localUrl.getFile().replace("+", "%2B"), "UTF-8");
+        System.out.println(path);
+        //前面就是保护域啥的为了获取到jar包
+        //C:/Users/c'x'k/Desktop/cc/LASTRASP/target/LASTRASP-1.0-SNAPSHOT-jar-with-dependencies.jar
+        inst.appendToBootstrapClassLoaderSearch(new JarFile(path));//这里是把jar包添加进 lib目录中
+        
+        //但是添加了我的lib目录没看到，可能只是一个虚拟添加那种
+    } catch (IOException e) {
+        throw new RuntimeException(e);
+    }
+}
+```
+
+（这里添加到`BootstrapClassLoader`搜索范围的类貌似都需要是公开类，`addJarToBootStrap`要放在premain的开头，否则会有一些奇怪的错误）	
+
+![image-20231105214736605](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231105214736605.png)
+
+当然也可以不调用自定义的类，直接给`ProcessImpl`加个方法，这样就不存在类加载的问题了。但是需要手搓ASM
+
+（这个方法本质上和上面的没有区别，就是麻烦点）
 
 
 
 
 
+## Bypass	
+
+上面的hook点在`ProcessImpl#start`,我们可以通过更底层的函数来绕过。
+
+以windows为例，直接调用`ProcessImpl`的native方法`create`
+
+利用`sun.misc.Unsafe#allocateInstance`去实例化`ProcessImpl`
+
+![image-20231106091936729](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231106091936729.png)
+
+```java
+Process process = Runtime.getRuntime().exec("whoami");
+
+BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+String line;
+while ((line = reader.readLine()) != null) {
+    System.out.println(line);
+}
+```
+
+之前调用`Runtime#exec`会返回一个`Process`对象，而`ProcessImpl`是`Process`的实现类
+
+`getInputStream`返回`Process`对象的`stdout_stream`标准输出流，我们获取命令执行的结果大概是这样子的
+
+`先简单看一下getInputStream方法干了什么（就返回了一个输出流对象,说明运算啥的不是在这完成的，那肯定就是构造方法）
+
+![image-20231106095511021](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231106095511021.png)
+
+果然在构造方法实现了，一些stdHandles的赋值，但是create是native方法，所以我们不能获得完整的ProcessImpl对象，就需要自己把这个逻辑写出来
+
+(如果方法是用native关键字声明的，也就是原生方法（Native methods），则不能通过反射直接获取和执行这些方法。)
+
+![image-20231106100249416](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231106100249416.png)
+
+```java
+import sun.misc.JavaIOFileDescriptorAccess;
+import sun.misc.Unsafe;
+
+import java.io.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+
+public class ByPass {
+    public static void main(String[] args) throws Exception {
+        Class<?> clazz = Class.forName("sun.misc.Unsafe");
+        Field field = clazz.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        Unsafe unsafe = (Unsafe) field.get(null);
+        Class<?> processImpl = Class.forName("java.lang.ProcessImpl");
+        Process process = (Process) unsafe.allocateInstance(processImpl);
+        Method create = processImpl.getDeclaredMethod("create", String.class, String.class, String.class, long[].class, boolean.class);
+        create.setAccessible(true);
+        long[] stdHandles = new long[]{-1L, -1L, -1L};
+        create.invoke(process, "whoami", null, null, stdHandles, false);
+
+        JavaIOFileDescriptorAccess fdAccess
+            = sun.misc.SharedSecrets.getJavaIOFileDescriptorAccess();
+        FileDescriptor stdout_fd = new FileDescriptor();
+        fdAccess.setHandle(stdout_fd, stdHandles[1]);
+        InputStream inputStream = new BufferedInputStream(
+            new FileInputStream(stdout_fd));
+
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+
+        String line;
+        while ((line = reader.readLine()) != null) {
+            System.out.println(line);
+        }
+    }
+}
+```
+
+![image-20231106101504422](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231106101504422.png)
+
+## Hook Native
+
+那就把hook点改成native方法不就行了。
+
+但native方法不在java层面，不存在方法体，如何用ASM去修改呢？
+
+`Instrumentation`提供了一个方法`setNativeMethodPrefix`（设置 原生方法前缀）
+
+```java
+此方法通过允许使用应用于名称的前缀重试来修改本机方法解析的失败处理。与 ClassFileTransformer 一起使用时，它支持检测本机方法。
+由于本机方法不能直接检测（它们没有字节码），因此必须使用可以检测的非本机方法包装它们。例如，如果我们有：
+    
+native boolean foo(int x);
 
 
+我们可以转换类文件（在类的初始定义期间使用 ClassFileTransformer），以便它变成：
+boolean foo(int x) {
+... record entry to foo ...
+return wrapped_foo(x);
+}
+native boolean wrapped_foo(int x);	
 
 
+其中 foo 成为附加前缀“wrapped_”的实际本机方法的包装器。
+包装器将允许在本机方法调用中收集数据，但现在问题变成了将包装方法与本机实现链接起来。也就是说，方法wrapped_foo需要解析为 foo 的原生实现，可能是：
+Java_somePackage_someClass_foo(JNIEnv* env, jint x)
+此函数允许指定前缀并发生正确的解析。具体而言，当标准解析失败时，将考虑前缀重试解析。
+有两种解决方式，一种是使用 JNI 函数 RegisterNatives 进行显式解决，另一种是正常的自动解决。对于 RegisterNatives，JVM 将尝试以下关联：
+method(foo) -> nativeImplementation(foo)
+如果此操作失败，将重试解析，并在方法名称前面加上指定的前缀，从而产生正确的解决方法：
+method(wrapped_foo) -> nativeImplementation(foo)
+    
+    
+为了自动解析，JVM 将尝试：
+method(wrapped_foo) -> nativeImplementation(wrapped_foo)
+如果此操作失败，将重试解析，并从实现名称中删除指定的前缀，从而产生正确的解决方法：
+method(wrapped_foo) -> nativeImplementation(foo)
 
+```
 
+给原本的native方法加上一个前缀，再套一层方法来调用添加前缀的native方法。
+
+这时候需要重新建立java方法和native方法的映射关系。
+
+以openJDK为例，`ProcessImpl#create`和其C实现对应如下：
+
+![image-20231106114313290](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231106114313290.png)
+
+https://github.com/openjdk/jdk/blob/master/src/java.base/windows/native/libjava/ProcessImpl_md.c
+
+![image-20231106114323357](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231106114323357.png)
+
+native方法的名称格式为`Java_PackageName_ClassName_MethodName`，这个规则称为标准解析(`standard resolution`)
+
+如果给jvm增加一个ClassFileTransformer并设置native prefix，jvm将进行自动解析(`normal automatic resolution`)
+
+```java
+// premain
+if (inst.isNativeMethodPrefixSupported()) {
+    // 添加native方法前缀解析
+    inst.setNativeMethodPrefix(transformer, NATIVE_PREFIX);
+} else {
+    throw new UnsupportedOperationException("Native Method Prefix UnSupported");
+}
+```
+
+```
+setNativeMethodPrefix`要在`inst.addTransformer`之后调用，否则会抛出异常`transformer not registered in setNativeMethodPrefix
+```
+
+要开启native prefix，还得在`MANIFEST.MF`中设置`Can-Set-Native-Method-Prefix: true`
+
+```
+<Can-Set-Native-Method-Prefix>true</Can-Set-Native-Method-Prefix>
+```
+
+换`javassist`，虽然灵活性没有ASM高，但在这个案例中使用够够的了。
+
+修改上面的`RaspTransformer`
+
+```java
+package com.demo.rasp.transformer;
+
+import com.demo.rasp.hook.ProcessImplHook;
+import java.lang.instrument.ClassFileTransformer;
+import java.security.ProtectionDomain;
+
+public class RaspTransformer implements ClassFileTransformer {
+
+    @Override
+    public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) {
+        if (className.equals("java/lang/ProcessImpl")) {
+            try {
+                return ProcessImplHook.transform();
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+        return classfileBuffer;
+    }
+}
+```
+
+创建一个`ProcessImplHook`类，用于读取目标类并修改类字节码后返回字节数组
+
+```java
+package com.demo.rasp.hook;
+
+import javassist.*;
+import javassist.bytecode.AccessFlag;
+
+public class ProcessImplHook {
+    public static byte[] transform() throws Exception {
+        ClassPool pool = ClassPool.getDefault();
+        CtClass clazz = pool.getCtClass("java.lang.ProcessImpl");
+        if (clazz.isFrozen()) {
+            clazz.isFrozen();
+        }
+        CtMethod create = clazz.getDeclaredMethod("create");//得到create或者方法
+        CtMethod wrapped = CtNewMethod.copy(create, clazz, null);//复制给了clazz
+        wrapped.setName("RASP_create");
+        clazz.addMethod(wrapped);
+
+        create.setModifiers(create.getModifiers() & ~AccessFlag.NATIVE);//java类中访问标志取反
+        create.setBody("{if($1.equals(\"calc\")) throw new RuntimeException(\"protected by RASP :)\");return RASP_create($1,$2,$3,$4,$5);}");
+        clazz.detach();
+        return clazz.toBytecode();
+    }
+}
+```
+
+`CtNewMethod.copy`将`create`方法复制一份，并加上前缀`RASP_`，后面jvm将自动解析这个native方法
+
+接下来在原来的方法的基础上去掉`NATIVE`的访问修饰符，设置方法体，`$1`表示第一个参数，以此类推。
+
+判断第一个参数（即`cmdstr`）是否为恶意命令，是的话则抛出异常，否则调用加上前缀`RASP_`的`native`方法，直接return，参数原封不动传入。
+
+（简单阐述，复制了create方法为RASP_create，然后把本来的create的native删掉了，那么create其实就没用了，接着对RASP_create传的参数进行了判断）
+
+## Native Bypass
+
+可以看到上面hook本地方法本质上就是给native方法换了个名，再套上原来壳，如果我们知道native方法的前缀，理论上应该是能绕过的。
+
+```java
+这里的意思其实就是，如果我们知道了 RASP_create不就直接调用这个了嘛，相当于这个是最最底层的了
+```
+
+## 彻底总结
+
+```java
+上面我们实现一个Demo，防御和绕过RASP
+防御，我们尽可能的去修改恶意代码的字节码，比如那个ProcessImpl我们就是判断start方法，如果符合就添加一个hook方法然后最后throw抛出异常提前退出就不会真正执行到start方法体中。
+    
+最后还涉及到了RASP setNativeMethodPrefix这个方法的解析方式，手动加一个前缀然后复制create类（相当于一个套娃，多了层保护罩）除非你能猜到我的前缀名称，然后通过判断参数来看是否是危险的（calc）
+```
 
 
 
