@@ -818,6 +818,32 @@ JNICALL Java_com_anbai_sec_cmd_CommandExecution_exec
 
 ```java
 g++ -fPIC -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" -shared -o libcmd.so com_anbai_sec_cmd_CommandExecution.cpp
+    
+    g++ -fPIC -I"/home/kali/Desktop/新建文件夹 (8)/javajdk/jdk1.8.0_391/include" -I"/home/kali/Desktop/新建文件夹 (8)/javajdk/jdk1.8.0_391/include/linux" -shared -o libcmd.so EvilClass.c
 ```
 
 这样就生成了一个libcmd.so文件
+
+注:/usr/lib/jvm/java-1.5.0-sun-1.5.0.19/include 是jni.h头文件所在的路径
+
+/home/kali/Desktop/新建文件夹 (8)/javajdk/jdk1.8.0_391/include
+
+/home/kali/Desktop/新建文件夹 (8)/javajdk/jdk1.8.0_391/include/linux
+
+/usr/lib/jvm/java-1.5.0-sun-1.5.0.19/include/linux 是jni_md.h所在的路径
+
+```java
+两种方式都差不多，只不过windows是dll，linux是so文件
+```
+
+
+
+java加载动态链接库常见有三种方法
+
+1. System.load /System.loadLibrary
+2. Runtime.getRuntime().load / Runtime.getRuntime().loadLibrary
+3. com.sun.glass.utils.NativeLibLoader.loadLibrary
+
+load接收的是绝对路径
+
+loadLibrary接收的是相对路径，可通过目录穿越到环境变量目录
