@@ -724,28 +724,33 @@ public class CommandExecutionTest {
             2, 0, 3, 0, 0, 0, 0, 0, 2, 0, 1, 0, 4, 0, 5, 0, 1, 0, 6, 0, 0, 0, 29, 0, 1, 0, 1,
             0, 0, 0, 5, 42, -73, 0, 1, -79, 0, 0, 0, 1, 0, 7, 0, 0, 0, 6, 0, 1, 0, 0, 0, 7, 1,
             9, 0, 8, 0, 9, 0, 0, 0, 1, 0, 10, 0, 0, 0, 2, 0, 11
-    };/
+    };//定义类中的字节码，这里很奇怪不知道怎么生成的这些数字
+    
+    
     public static void main(String[] args) {
         String cmd = "ifconfig";// 定于需要执行的cmd
         try {
             ClassLoader loader = new ClassLoader(CommandExecutionTest.class.getClassLoader()) {
+                //获取类加载器
                 @Override
                 protected Class<?> findClass(String name) throws ClassNotFoundException {
                     try {
-                        return super.findClass(name);
+                        return super.findClass(name);//findclass底层加载
                     } catch (ClassNotFoundException e) {
                         return defineClass(COMMAND_CLASS_NAME, COMMAND_CLASS_BYTES, 0, COMMAND_CLASS_BYTES.length);
                     }
                 }
             };
             // 测试时候换成自己编译好的lib路径
-            File libPath = new File("/Users/yz/IdeaProjects/javaweb-sec/javaweb-sec-source/javase/src/main/java/com/anbai/sec/cmd/libcmd.jnilib");
+            File libPath = new File("/Users/yz/IdeaProjects/javaweb-sec/javaweb-sec-source/javase/src/main/java/com/anbai/sec/cmd/libcmd.so");
+            //这里加载的东西没看懂！！！
+            
             // load命令执行类
             Class commandClass = loader.loadClass("com.anbai.sec.cmd.CommandExecution");
             // 可以用System.load也加载lib也可以用反射ClassLoader加载,如果loadLibrary0
             // 也被拦截了可以换java.lang.ClassLoader$NativeLibrary类的load方法。
 //            System.load("/Users/yz/IdeaProjects/javaweb-sec/javaweb-sec-source/javase/src/main/java/com/anbai/sec/cmd/libcmd.jnilib/libcmd.jnilib");
-            Method loadLibrary0Method = ClassLoader.class.getDeclaredMethod("loadLibrary0", Class.class, File.class);
+            Method loadLibrary0Method = ClassLoader.class.getDeclaredMethod("loadLibrary0", Class.class, File.class);//获得加载器中的loadLibrary0
             loadLibrary0Method.setAccessible(true);
             loadLibrary0Method.invoke(loader, commandClass, libPath);
             String content = (String) commandClass.getMethod("exec", String.class).invoke(null, cmd);
@@ -757,3 +762,62 @@ public class CommandExecutionTest {
 }
 ```
 
+```java
+首先自定义了一个加载器，根据二进制流生成
+
+```
+
+JDK10移除了`javah`,需要改为`javac`加`-h`参数的方式生产头文件，如果您的JDK版本正好`>=10`,那么使用如下方式可以同时编译并生成头文件：
+
+```java
+javac -cp . com/anbai/sec/cmd/CommandExecution.java -h com/anbai/sec/cmd/
+```
+
+执行上面所述的命令后即可看到在`com/anbai/sec/cmd/`目录已经生成了`CommandExecution.class`和`com_anbai_sec_cmd_CommandExecution.h`了。
+
+然后根据头文件生成对应的cpp 文件
+
+```java
+//
+// Created by yz on 2019/12/6.
+//
+#include <iostream>
+#include <stdlib.h>
+#include <cstring>
+#include <string>
+#include "com_anbai_sec_cmd_CommandExecution.h"
+using namespace std;
+JNIEXPORT jstring
+JNICALL Java_com_anbai_sec_cmd_CommandExecution_exec
+        (JNIEnv *env, jclass jclass, jstring str) {
+    if (str != NULL) {
+        jboolean jsCopy;
+        // 将jstring参数转成char指针
+        const char *cmd = env->GetStringUTFChars(str, &jsCopy);
+        // 使用popen函数执行系统命令
+        FILE *fd  = popen(cmd, "r");
+        if (fd != NULL) {
+            // 返回结果字符串
+            string result;
+            // 定义字符串数组
+            char buf[128];
+            // 读取popen函数的执行结果
+            while (fgets(buf, sizeof(buf), fd) != NULL) {
+                // 拼接读取到的结果到result
+                result +=buf;
+            }
+            // 关闭popen
+            pclose(fd);
+            // 返回命令执行结果给Java
+            return env->NewStringUTF(result.c_str());
+        }
+    }
+    return NULL;
+}
+```
+
+```java
+g++ -fPIC -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" -shared -o libcmd.so com_anbai_sec_cmd_CommandExecution.cpp
+```
+
+这样就生成了一个libcmd.so文件
