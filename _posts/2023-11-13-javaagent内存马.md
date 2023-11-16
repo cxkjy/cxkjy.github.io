@@ -10,22 +10,6 @@ image:
   creditlink: azeril.com
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## 前言
 
 ```java
@@ -257,7 +241,7 @@ public class CrackTest {
 
 可以看到修改了我们原来的程序
 
-![image-20231114112348329](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231114112348329.png)
+![image-20231114112348329](X:\..\img\final\image-20231114112348329.png)
 
 ## 利用Java Agent注入内存马
 
@@ -379,4 +363,4 @@ http://wjlshare.com/archives/1582
 java -jar ysoserial-0.0.6-SNAPSHOT-all.jar CommonsCollections11 codefile:./TestAgentMain.java > cc11demo.ser
 ```
 
-![image-20231114153610044](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231114153610044.png)
+![image-20231114153610044](X:\..\img\final\image-20231114153610044.png)
