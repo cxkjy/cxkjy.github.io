@@ -13,8 +13,6 @@ image:
 
 
 
-
-
 ## EasyJava
 
 ```java
