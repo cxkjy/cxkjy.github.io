@@ -125,7 +125,7 @@ com.mysql.cj.jdbc.util.ResultSetUtil#resultSetToMap()
 
 这俩种方法都可以调用方法，只不过参数一个可控一个不可控，rs需要传入ResultSetImpl对象
 
-![image-20231127131512770](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231127131512770.png)
+![image-20231127131512770](..\img\final\image-20231127131512770.png)
 
 ### 找哪里调用了 resultSetToMap()
 
@@ -211,9 +211,9 @@ public class payload {
 
 ```
 
-![image-20231127133523519](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231127133523519.png)
+![image-20231127133523519](..\img\final\image-20231127133523519.png)
 
-![image-20231127134028383](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231127134028383.png)
+![image-20231127134028383](..\img\final\image-20231127134028383.png)
 
 结合上面的分析，如果参数和`JDBC url`可控，就能执行反序列化，存在CC和CB链的反序列化漏洞时就可以进行漏洞利用。而这个参数就是**查询语句的结果集**，因此假如`JDBC url`可控，我们就可以让它连接任意Mysql服务器，就可以搭建恶意MySQL服务器来控制这两个查询的结果集，结合控制`JDBC url`中的连接设置项，就可以构成**JDBC反序列化漏洞**
 
@@ -319,7 +319,7 @@ if __name__ == '__main__':
     run()
 ```
 
-![image-20231127205216130](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231127205216130.png)
+![image-20231127205216130](..\img\final\image-20231127205216130.png)
 
 ### 不同 MySQL-JDBC-Driver 的 JDBC设置
 
@@ -425,7 +425,7 @@ https://github.com/allyshka/Rogue-MySql-Server 用python2脚本运行即可
 
 右边是恶意的服务器记得要先kill 3306端口的进程
 
-![image-20231128111641384](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231128111641384.png)
+![image-20231128111641384](..\img\final\image-20231128111641384.png)
 
 
 
@@ -433,7 +433,7 @@ https://github.com/allyshka/Rogue-MySql-Server 用python2脚本运行即可
 
 ##### 在php中也可以利用，只要ip可控就可以了
 
-![image-20231128112827334](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231128112827334.png)
+![image-20231128112827334](..\img\final\image-20231128112827334.png)
 
 ```java
 <?php
@@ -489,11 +489,11 @@ while (true) {
 
 但是在kali和本地都是正常的
 
-![image-20231128151116391](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231128151116391.png)
+![image-20231128151116391](..\img\final\image-20231128151116391.png)
 
 ## mysql任意读取文件实践
 
-![image-20231128152429751](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231128152429751.png)
+![image-20231128152429751](..\img\final\image-20231128152429751.png)
 
 ```java
     import com.mysql.cj.jdbc.interceptors.ServerStatusDiffInterceptor;
@@ -522,7 +522,7 @@ while (true) {
 
 继续读某一个jar包呢（也是可以的）
 
-![image-20231128152909719](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231128152909719.png)
+![image-20231128152909719](..\img\final\image-20231128152909719.png)
 
 ##### 总结一下流程：
 
