@@ -1,6 +1,6 @@
 ---
 layout: post
-title: PostGrasql
+title: PostGrasql CVE复现
 categories: [blog ]
 tags: [Java,]
 description: ""
@@ -34,13 +34,13 @@ JDBC java数据库连接，是Java语言中用来规范客户端如何访问数�
 
 这个漏洞主要产生的原因是，`org.postgresql.util.ObjectFactory` 里面调用了`instantiate` 方法
 
-![image-20231224205642825](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231224205642825.png)
+![image-20231224205642825](..\img\final\image-20231224205642825.png)
 
 大概意思就是对classname类名的String构造方法，赋值stringarg并进行初始化
 
 `任意执行某个类的string构造方法`，因此只要找到一个符合这样条件的类即可
 
-![image-20231224205955928](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231224205955928.png)
+![image-20231224205955928](..\img\final\image-20231224205955928.png)
 
 传入的参数都是通过 `Properties info`来获得的，所以能直接反射修改:
 
@@ -95,23 +95,23 @@ public class cve2022 {
 </beans>
 ```
 
-![image-20231224212159159](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231224212159159.png)
+![image-20231224212159159](..\img\final\image-20231224212159159.png)
 
 关键的地方在`org.postgresql.Driver#connect` ,这里通过parseURL对传入的url进行了解析存入了prpos也就是info中
 
-![image-20231224213235810](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231224213235810.png)
+![image-20231224213235810](..\img\final\image-20231224213235810.png)
 
 进入导致传入`ObjectFactory ` 的形参都是可控的，这里初始化的是
 
 `org.springframework.context.support.ClassPathXmlApplicationContext`
 
-![image-20231224213416888](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231224213416888.png)
+![image-20231224213416888](..\img\final\image-20231224213416888.png)
 
-![image-20231224213602623](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231224213602623.png)
+![image-20231224213602623](..\img\final\image-20231224213602623.png)
 
 这两个类都可以执行xml代码
 
-![image-20231224220156639](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231224220156639.png)
+![image-20231224220156639](..\img\final\image-20231224220156639.png)
 
 ```java
 是通过远程加载 bean 配置文件，利用初始化 ProcessImpl 类的 bean 的过程，将任意字符串作为命令行执行内容注入，达到任意命令行命令执行的效果,也就是远程加载xml文件进行解析。
@@ -119,7 +119,7 @@ public class cve2022 {
 
 #### 调用链子
 
-![image-20231224220724248](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231224220724248.png)
+![image-20231224220724248](..\img\final\image-20231224220724248.png)
 
 ## 清空指定的任意文件
 
@@ -135,7 +135,7 @@ FileOutputStream fileOutputStream=new FileOutputStream("test.txt");
 
 偷张图，这个 图描述的非常直观
 
-![image-20231226174331297](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226174331297.png)
+![image-20231226174331297](..\img\final\image-20231226174331297.png)
 
 ## 任意文件写入 loggerLevel/loggerFile
 
@@ -149,23 +149,23 @@ FileOutputStream fileOutputStream=new FileOutputStream("test.txt");
 jdbcUrl="jdbc:postgresql://127.0.0.1:5432/test?loggerLevel=DEBUG&loggerFile=./test.jsp&<%Runtime.getRuntime().exec(request.getParameter(\"i\"));%>\n";
 ```
 
-![image-20231226174857263](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226174857263.png)
+![image-20231226174857263](..\img\final\image-20231226174857263.png)
 
 在`setupLoggerFromProperties `中设置日志的一些前提要求，这里props是数组解析我们传入的参数，首先 获得LOGGER_LEVEL不为空，否则进不去执行语句
 
-![image-20231226180337611](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226180337611.png)
+![image-20231226180337611](..\img\final\image-20231226180337611.png)
 
 然后`driverLogFile`获得存储日志的位置
 
-![image-20231226180508526](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226180508526.png)
+![image-20231226180508526](..\img\final\image-20231226180508526.png)
 
 最后进入关键的LOGGER.log方法进行存储
 
-![image-20231226180552229](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226180552229.png)
+![image-20231226180552229](..\img\final\image-20231226180552229.png)
 
 学过jsp的应该知道，jsp会执行<%%>当作java片段，前面的不会影响的
 
-![image-20231226180658595](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226180658595.png)
+![image-20231226180658595](..\img\final\image-20231226180658595.png)
 
 犹豫对路径没有一点的过滤，所以可以跨目录进行生成
 
@@ -187,14 +187,14 @@ public class cve202221724 {
 
 和任意代码执行的出口不一样
 
-![image-20231226180806337](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226180806337.png)
+![image-20231226180806337](..\img\final\image-20231226180806337.png)
 
 ## 在高版本中对这些现象进行了修复
 
 高版本规定了，反射的类，必须是javax.net.SocketFactory的子类，否则就抛出异常
 
-![image-20231226181352838](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226181352838.png)
+![image-20231226181352838](..\img\final\image-20231226181352838.png)
 
 对比一下发现把this.setupLoggerFromProperties(props);删除掉了（也就是说不能指定存储文件的位置了）
 
-![image-20231226181804490](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20231226181804490.png)
+![image-20231226181804490](..\img\final\image-20231226181804490.png)
