@@ -16,6 +16,10 @@ image:
 
 Apereo Cas一般是用来做身份认证的，所以有一定的攻击面，漏洞的成因是因为key的默认硬编码，导致可以通过反序列化配合Gadget使用。
 
+通过路由404报错查看版本：`https://cas.example.com/cas/iwana404;)`
+
+- 
+
 ## 2、环境搭建
 
 ```java
@@ -117,3 +121,37 @@ x:\资料\蓝凌ekp
 这里也是参考其它师傅的文章
 
 ![image-20240701150826277](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240701150826277.png)
+
+## Apereo CAS 4.1.7 ～ 4.2.X
+
+![image-20240702133412049](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240702133412049.png)
+
+高版本的依赖去掉了commmons-collections4.但是加了
+C3p0和CB的依赖
+
+高版本的额话就是密钥可以从cas.properties中设置
+![](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240702135813062.png)
+
+
+
+![image-20240702135918870](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240702135918870.png)
+
+c
+
+直接打出现的报错
+
+![image-20240702154007872](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240702154007872.png)
+
+
+
+通过设置cas.properties中的字段
+
+```java
+warn.cookie.secure=0
+webflow.encryption.key=K81v0XNPR2tZKuJA
+webflow.signing.key=WlNYnlAlHRtPPPS6rygh5y_-7H1UTzAtJHVpzFoWyogANdoxd99LdjmLEuDKzPeo5Q5IB40zWcteAkDglHy2ZA
+```
+
+打算进行二开
+
+cas_exploit-1.0-SNAPSHOT-all.jar
