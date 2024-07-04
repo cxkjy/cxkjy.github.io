@@ -136,8 +136,6 @@ C3p0和CB的依赖
 
 ![image-20240702135918870](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240702135918870.png)
 
-c
-
 直接打出现的报错
 
 ![image-20240702154007872](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240702154007872.png)
@@ -155,3 +153,13 @@ webflow.signing.key=WlNYnlAlHRtPPPS6rygh5y_-7H1UTzAtJHVpzFoWyogANdoxd99LdjmLEuDK
 打算进行二开
 
 cas_exploit-1.0-SNAPSHOT-all.jar
+
+根据别人的jar包，分析了一下，发现上面报错的原因是密钥不正确
+
+![image-20240703135647002](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240703135647002.png)
+
+发现已经给出了特有的密钥方法，只不过我没cas.properties就会赋值null，导致的报错
+![image-20240703140617793](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240703140617793.png)
+
+解决！！！
+![image-20240703140805099](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240703140805099.png)
