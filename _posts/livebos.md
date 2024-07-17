@@ -118,8 +118,11 @@ struct2的象征，文件默认后缀为*.action，在structs.xml或者web.xml�
 
 ### web.xml
 
+#### LogonFilter
+
 ```java
-LogonFilter     *.do
+ LogonFilter     *.do  *.ui   
+FormOperate、CalendarServlet、StartWorkflow、ShowWorkflow 、WorkOperate、UIProcessor、OperateProcessor、GeneralObj、NotificationServlet  这些servlet都是走的这个过滤器
 ```
 
 进来之后else直接doFilter，这么快嘛我丢。。。从请求中获取呃呃呃，那肯定没东西
@@ -159,6 +162,108 @@ LogonFilter     *.do
 
 ![image-20240716180859166](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240716180859166.png)
 
+#### CompressionFilter（header无gzip直接过）
+
+userCompressionFilter 是从system.properties中取得`compress.enabled`的值为true
+然后进入if，就是看 hearders头中是否有gzip，如果有就退出，这里我们弄成没有。
+
+![image-20240717113039749](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717113039749.png)
+
+到了`cookieHttpOnly`这个if语句，但是在system.properties中没定义`system.cookie.httponly`的值，默认为false
+
+然后进入if(compress)这个判断，compress一开始赋值为**false**，直接进入else语句
+
+![image-20240717114238450](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717114238450.png)
+
+就这😼😼😼，拿下
+
+#### WebServiceFilter
+
+```java
+String uri = hpReq.getRequestURI();
+String qs = hpReq.getQueryString();  //🤔我？？？
+```
+
+上面是日志操作直接略过就行，直接看这个`isRESTFul`
+这里希望返回false，不然就直接return了
+
+![image-20240717114814940](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717114814940.png)
+
+进入逻辑就是不能进入/service/LBREST这个路径，这里//不知道能否绕过
+![image-20240717115738818](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717115738818.png)
+
+后面的就是一些版本没啥用，也直接没拦截直接下一层过滤器了
+![image-20240717120126033](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717120126033.png)
+
+#### structs-feed-config.xml
+
+`里面相当于路由配置的功能`
+
+![image-20240717124032652](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717124032652.png)
+
+#### FeedFilter
+
+在web.xml中被注释调了
+
+![image-20240717124225416](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717124225416.png)
+
+没登录，就现实错误界面，绕不过去
+
+![image-20240717125427136](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717125427136.png)
+
+### 然后看<servlet-mapping\>
+
+#### WorkflowsServlet
+
+### 遇到了一个问题
+
+```java
+就是看servlet简单的过一下，看了几个发现都是数据处理的逻辑没啥用。这时候只有两种思路
+1、从servlet名字入手，比如叫uploadservlet
+2、看历史漏洞入手
+```
+
+### FileUpload
+
+这里从 `system.properties`中获得`session.id.parameter`但是没这个值，默认就是`JESSIONID`
+
+![image-20240717141623653](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717141623653.png)
+
+最后会走到这里`error.FileUpload.sessionInvalid`
+
+### SimpleUploaderServlet（任意文件上传  位置不可控）
+
+![image-20240717142916870](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717142916870.png)
+
+```java
+private static final String[] supportTypes = new String[]{"Image", "Flash"};
+也就是 Type的值需要是上面二种
+```
+
+![image-20240717142944010](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717142944010.png)
+
+继续向下走
+
+`enabled`的值初始化定义了为true,
+
+![image-20240717143511287](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717143511287.png)
+![image-20240717143421712](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717143421712.png)
+
+首先将multipart中的请求存入map中，然后提取中名字为NewFile的赋值给 FileItem uplFile
+这里就是提取出 文件名 +后缀名，去除冗余
+
+![image-20240717145911130](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717145911130.png)
+
+这里的relativePath 是这里getId（）的值
+![image-20240717150244723](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717150244723.png)
+后面的就是写入文件的操作
+
+这里我感觉是可能出东西的，就是这个写入的位置不可控。。。
+
+发现是loginFilter是真的可以绕过
+
+![image-20240717150937036](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717150937036.png)
+
 ## 先看个老洞（LiveBOS ShowImage.do 任意文件读取漏洞)
 
 ```plain
@@ -181,5 +286,11 @@ new FSFile("/feed/upload/" + type + "/", imgName);
 //这里type必须是小写字母，imgName可控，直接../../../../../etc/passwd即可，所以导致漏洞
 ```
 
+这里分析一下路由
+```java
+/feed/ShowImage.do;.js.jsp
+这个do不太明白，虽然知道.do是struct2特有的，但为啥需要+.do呢，如果不添加则访问不到
+```
 
+![image-20240717154118203](X:\github\cxkjy.github.io\cxkjy.github.io\img\final\image-20240717154118203.png)
 
